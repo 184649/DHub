@@ -5,7 +5,7 @@
   },
   "projects": {
     "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\Updater\\Updater.csproj": {
-      "version": "1.0.0",
+      "version": "1.0.4",
       "restore": {
         "projectUniqueName": "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\Updater\\Updater.csproj",
         "projectName": "DHubUpdater",
