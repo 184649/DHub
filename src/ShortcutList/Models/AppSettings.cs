@@ -18,7 +18,7 @@ public class AppSettings
     public bool ShowUpdatedAtColumn { get; set; } = true;
     public bool ShowStatusColumn { get; set; } = true;
 
-    public string UpdateVersionUrl { get; set; } = "https://raw.githubusercontent.com/Chairman-bits/DHub/main/version.json";
+    public string UpdateVersionUrl { get; set; } = "https://raw.githubusercontent.com/184649/DHub/main/version.json";
     public bool CheckUpdateOnStartup { get; set; } = true;
 
     public bool EnableGlobalHotkeys { get; set; } = true;

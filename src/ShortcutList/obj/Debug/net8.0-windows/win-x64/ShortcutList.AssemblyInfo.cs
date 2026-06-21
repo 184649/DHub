@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("DHub shortcut launcher")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.4.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.4+86e46278a7a5a75e72f0aaa8c4f7703cc46420d1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.4+4765b6285ad79d26516d4d56510ef26d1a6b6995")]
 [assembly: System.Reflection.AssemblyProductAttribute("DHub")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DHub")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.4.0")]

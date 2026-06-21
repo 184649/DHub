@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj": {}
+    "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj": {}
   },
   "projects": {
-    "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj": {
+    "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj": {
       "version": "1.0.4",
       "restore": {
-        "projectUniqueName": "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
+        "projectUniqueName": "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
         "projectName": "DHub",
-        "projectPath": "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
+        "projectPath": "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
         "packagesPath": "C:\\Users\\ambiv\\.nuget\\packages\\",
-        "outputPath": "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\obj\\",
+        "outputPath": "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -30,7 +30,8 @@
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net8.0-windows7.0": {
+          "net8.0-windows": {
+            "framework": "net8.0-windows7.0",
             "targetAlias": "net8.0-windows",
             "projectReferences": {}
           }
@@ -45,16 +46,17 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.300"
       },
       "frameworks": {
-        "net8.0-windows7.0": {
+        "net8.0-windows": {
+          "framework": "net8.0-windows7.0",
           "targetAlias": "net8.0-windows",
           "dependencies": {
             "Microsoft.NET.ILLink.Tasks": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[8.0.26, )",
+              "version": "[8.0.28, )",
               "autoReferenced": true
             }
           },
@@ -72,15 +74,15 @@
           "downloadDependencies": [
             {
               "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-              "version": "[8.0.26, 8.0.26]"
+              "version": "[8.0.28, 8.0.28]"
             },
             {
               "name": "Microsoft.NETCore.App.Runtime.win-x64",
-              "version": "[8.0.26, 8.0.26]"
+              "version": "[8.0.28, 8.0.28]"
             },
             {
               "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-              "version": "[8.0.26, 8.0.26]"
+              "version": "[8.0.28, 8.0.28]"
             }
           ],
           "frameworkReferences": {
@@ -91,7 +93,7 @@
               "privateAssets": "none"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.203/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

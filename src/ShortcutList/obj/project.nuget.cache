@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "HQ9mcHC28Dw=",
+  "dgSpecHash": "mSG1xVrcKFE=",
   "success": true,
-  "projectFilePath": "C:\\Program Files\\work\\git\\BITS\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
+  "projectFilePath": "C:\\Program Files\\work\\git\\DHub\\DHub_dev\\src\\ShortcutList\\ShortcutList.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.26\\microsoft.net.illink.tasks.8.0.26.nupkg.sha512",
-    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.26\\microsoft.netcore.app.runtime.win-x64.8.0.26.nupkg.sha512",
-    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.26\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.26.nupkg.sha512",
-    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.26\\microsoft.aspnetcore.app.runtime.win-x64.8.0.26.nupkg.sha512"
+    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.28\\microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
+    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.28\\microsoft.aspnetcore.app.runtime.win-x64.8.0.28.nupkg.sha512",
+    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.28\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.28.nupkg.sha512",
+    "C:\\Users\\ambiv\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.28\\microsoft.netcore.app.runtime.win-x64.8.0.28.nupkg.sha512"
   ],
   "logs": []
 }
