@@ -1,0 +1,2 @@
+C:\Program Files\work\git\BITS\DHub\DHub_dev\src\Updater\bin\Release\net8.0\win-x64\publish\DHubUpdater.pdb
+C:\Program Files\work\git\BITS\DHub\DHub_dev\src\Updater\bin\Release\net8.0\win-x64\publish\DHubUpdater.exe

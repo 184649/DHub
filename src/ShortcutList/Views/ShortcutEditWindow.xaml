@@ -1,0 +1,272 @@
+﻿<Window x:Class="ShortcutList.Views.ShortcutEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ショートカット編集"
+        Width="760"
+        Height="680"
+        MinWidth="700"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="#F5F6F8">
+    <Grid Background="#F5F6F8">
+        <Border Margin="18"
+                Background="White"
+                BorderBrush="#D7DCE2"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="26">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="ショートカット編集"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="#20242A"/>
+                    <TextBlock Margin="0,6,0,0"
+                               Text="よく使うフォルダ、URL、ファイルを登録します。お気に入りや開くアプリもここで設定できます。"
+                               Foreground="#5F6875"
+                               FontSize="13"/>
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              CanContentScroll="False">
+                    <StackPanel>
+
+                        <TextBlock Text="名前" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                        <TextBox x:Name="NameTextBox"
+                                 Height="38"
+                                 Margin="0,0,0,14"
+                                 VerticalContentAlignment="Center"/>
+
+                        <TextBlock Text="パス / URL" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="110"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="TargetTextBox"
+                                     Height="38"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="TargetTextBox_TextChanged"/>
+
+                            <Button Grid.Column="2"
+                                    Height="38"
+                                    Content="参照"
+                                    Click="BrowseButton_Click"/>
+                        </Grid>
+
+                        <CheckBox x:Name="FavoriteCheckBox"
+                                  Margin="0,0,0,16"
+                                  Content="お気に入りに登録する"/>
+
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="210"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="グループ" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <TextBox x:Name="GroupTextBox"
+                                         Height="38"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="例: 開発、投資、仕事"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="色" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="TagColorComboBox"
+                                          Height="38"
+                                          VerticalContentAlignment="Center">
+                                    <ComboBoxItem Tag="#CBD5E1">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#CBD5E1" Margin="0,0,8,0"/>
+                                            <TextBlock Text="グレー"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                    <ComboBoxItem Tag="#60A5FA">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#60A5FA" Margin="0,0,8,0"/>
+                                            <TextBlock Text="青"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                    <ComboBoxItem Tag="#34D399">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#34D399" Margin="0,0,8,0"/>
+                                            <TextBlock Text="緑"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                    <ComboBoxItem Tag="#FACC15">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#FACC15" Margin="0,0,8,0"/>
+                                            <TextBlock Text="黄"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                    <ComboBoxItem Tag="#F87171">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#F87171" Margin="0,0,8,0"/>
+                                            <TextBlock Text="赤"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                    <ComboBoxItem Tag="#A78BFA">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="12" Height="12" Fill="#A78BFA" Margin="0,0,8,0"/>
+                                            <TextBlock Text="紫"/>
+                                        </StackPanel>
+                                    </ComboBoxItem>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="タグ（カンマ区切りで複数指定可）" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                        <TextBox x:Name="TagsTextBox"
+                                 Height="38"
+                                 Margin="0,0,0,18"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="例: GitHub, 開発, 資料"/>
+
+                        <Expander Header="詳細設定"
+                                  IsExpanded="True"
+                                  Margin="0,0,0,12">
+                            <StackPanel Margin="0,10,0,0">
+                                <TextBlock Text="開くアプリをクイック選択" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <WrapPanel Margin="0,0,0,10">
+                                    <Button Content="既定" Tag="default" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click" ToolTip="フォルダはエクスプローラー、URL/ファイルはWindowsの既定アプリで開きます。"/>
+                                    <Button Content="Explorer" Tag="explorer" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                    <Button Content="VS Code" Tag="vscode" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                    <Button Content="Visual Studio" Tag="visualstudio" MinWidth="110" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                    <Button Content="Chrome" Tag="chrome" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                    <Button Content="Edge" Tag="edge" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                    <Button Content="Excel" Tag="excel" MinWidth="82" Height="32" Margin="0,0,8,8" Click="QuickOpenApplicationButton_Click"/>
+                                </WrapPanel>
+                                <TextBlock Text="候補から検索して選択" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="OpenApplicationQuickComboBox"
+                                          Height="38"
+                                          Margin="0,0,0,10"
+                                          VerticalContentAlignment="Center"
+                                          IsEditable="True"
+                                          IsTextSearchEnabled="False"
+                                          StaysOpenOnEdit="True"
+                                          TextSearch.TextPath="Name"
+                                          SelectionChanged="OpenApplicationQuickComboBox_SelectionChanged"
+                                          KeyUp="OpenApplicationQuickComboBox_KeyUp"
+                                          DropDownOpened="OpenApplicationQuickComboBox_DropDownOpened"
+                                          Loaded="OpenApplicationQuickComboBox_Loaded"
+                                          ToolTip="プルダウン内に文字を入力すると候補を絞り込めます。例: code / cursor / chrome / excel / explorer">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="  /  " Foreground="#94A3B8"/>
+                                                <TextBlock Text="{Binding Category}" Foreground="#64748B"/>
+                                                <TextBlock Text="  " />
+                                                <TextBlock Text="{Binding DisplayPath}" Foreground="#94A3B8" FontSize="11"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <Expander Header="詳細指定（直接入力・参照・引数）" IsExpanded="False" Margin="0,4,0,8">
+                                <StackPanel Margin="0,10,0,0">
+                                <TextBlock Text="開くアプリ（直接入力も可）" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="100"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBox x:Name="OpenApplicationTextBox"
+                                             Height="38"
+                                             VerticalContentAlignment="Center"
+                                             TextChanged="OpenApplicationTextBox_TextChanged"
+                                             ToolTip="例: explorer.exe / notepad.exe / C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"/>
+
+                                    <Button Grid.Column="2"
+                                            Height="38"
+                                            Content="候補から選択"
+                                            Click="BrowseOpenApplicationButton_Click"/>
+                                    <Button Grid.Column="4"
+                                            Height="38"
+                                            Content="既定に戻す"
+                                            Click="ClearOpenApplicationButton_Click"/>
+                                </Grid>
+                                <TextBlock Margin="0,0,0,14"
+                                           Foreground="#5F6875"
+                                           FontSize="12"
+                                           Text="通常は上のクイック選択だけで設定できます。見つからない場合だけ候補検索または詳細指定を使います。"/>
+
+                                <TextBlock Text="開くアプリ用の引数（任意）" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <TextBox x:Name="OpenApplicationArgumentsTextBox"
+                                         Height="38"
+                                         Margin="0,0,0,8"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="{}{target} と書くと登録したパス/URLに置き換わります。未指定なら末尾に自動で渡します。"/>
+                                <TextBlock Margin="0,0,0,14"
+                                           Foreground="#5F6875"
+                                           FontSize="12"
+                                           Text="例: Chromeで新規ウィンドウ表示する場合 --new-window {target}"/>
+
+                                <TextBlock Text="対象に渡す引数（任意）" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                                <TextBox x:Name="ArgumentsTextBox"
+                                         Height="38"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="exeなどに渡す追加情報です。フォルダやURLでは通常不要です。"/>
+                                <TextBlock Margin="0,8,0,0"
+                                           Foreground="#5F6875"
+                                           FontSize="12"
+                                           Text="例: アプリ本体を直接登録して起動オプションを渡す場合に使用します。"/>
+                                </StackPanel>
+                                </Expander>
+
+
+                                <TextBlock Text="メモ・作業ノート（任意）" Margin="0,14,0,6" FontWeight="SemiBold"/>
+                                <TextBox x:Name="MemoTextBox"
+                                         Height="90"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         ToolTip="作業手順・注意点・関連情報をメモできます。統合検索の対象にもなります。"/>
+                            </StackPanel>
+                        </Expander>
+
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="4"
+                        BorderBrush="#E2E6EA"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,16,0,0">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right">
+                        <Button Width="112"
+                                Height="40"
+                                Margin="0,0,10,0"
+                                Content="キャンセル"
+                                Click="CancelButton_Click"/>
+                        <Button Width="130"
+                                Height="40"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Content="保存"
+                                Click="SaveButton_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

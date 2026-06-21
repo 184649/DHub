@@ -1,0 +1,135 @@
+﻿<Window x:Class="ShortcutList.Views.OpenApplicationPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="開くアプリを選択"
+        Width="860"
+        Height="620"
+        MinWidth="760"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="#F5F6F8">
+    <Grid Background="#F5F6F8">
+        <Border Margin="18"
+                Background="White"
+                BorderBrush="#D7DCE2"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="22">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="開くアプリを候補から選択"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="#20242A"/>
+                    <TextBlock Margin="0,6,0,0"
+                               Text="よく使うアプリを自動候補に表示します。見つからない場合だけ「直接参照」を使ってください。"
+                               Foreground="#5F6875"
+                               FontSize="13"/>
+                </StackPanel>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="120"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="SearchTextBox"
+                             Height="38"
+                             VerticalContentAlignment="Center"
+                             TextChanged="SearchTextBox_TextChanged"
+                             ToolTip="例: code / cursor / chrome / excel / explorer"/>
+
+                    <ComboBox x:Name="CategoryComboBox"
+                              Grid.Column="2"
+                              Height="38"
+                              VerticalContentAlignment="Center"
+                              SelectionChanged="CategoryComboBox_SelectionChanged"
+                              ToolTip="カテゴリで候補を絞り込みます。"/>
+
+                    <Button Grid.Column="4"
+                            Height="38"
+                            Content="直接参照"
+                            Click="BrowseButton_Click"/>
+                    <Button Grid.Column="6"
+                            Height="38"
+                            Content="既定に戻す"
+                            Click="UseDefaultButton_Click"/>
+                </Grid>
+
+                <ListView x:Name="CandidateListView"
+                          Grid.Row="4"
+                          SelectionChanged="CandidateListView_SelectionChanged"
+                          MouseDoubleClick="CandidateListView_MouseDoubleClick">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="アプリ" Width="190" DisplayMemberBinding="{Binding Name}"/>
+                            <GridViewColumn Header="種類" Width="100" DisplayMemberBinding="{Binding Category}"/>
+                            <GridViewColumn Header="説明" Width="260" DisplayMemberBinding="{Binding Description}"/>
+                            <GridViewColumn Header="場所" Width="260" DisplayMemberBinding="{Binding DisplayPath}"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+
+                <Border Grid.Row="6"
+                        Background="#F8FAFC"
+                        BorderBrush="#E2E6EA"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="選択中のアプリ" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="SelectedPathTextBlock"
+                                   Text="未選択"
+                                   Foreground="#5F6875"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="開くアプリ用の引数（任意）" FontWeight="SemiBold" Margin="0,12,0,6"/>
+                        <TextBox x:Name="ArgumentsTextBox"
+                                 Height="38"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="{}{target} と書くと登録したパス/URLに置き換わります。未指定なら末尾に自動で渡します。"/>
+                        <TextBlock Margin="0,6,0,0"
+                                   Text="例: Chromeで新規ウィンドウ表示する場合は  --new-window {target}"
+                                   Foreground="#5F6875"
+                                   FontSize="12"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="8"
+                        BorderBrush="#E2E6EA"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,14,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Width="112"
+                                Height="40"
+                                Margin="0,0,10,0"
+                                Content="キャンセル"
+                                Click="CancelButton_Click"/>
+                        <Button Width="150"
+                                Height="40"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Content="このアプリを使用"
+                                Click="OkButton_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

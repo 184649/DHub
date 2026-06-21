@@ -1,0 +1,68 @@
+<Window x:Class="ShortcutList.Views.QuickSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DHub Quick Search"
+        Width="760"
+        Height="460"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Border Background="White"
+            BorderBrush="#D7DCE2"
+            BorderThickness="1"
+            CornerRadius="14"
+            Padding="18">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.22"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="12"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBox x:Name="SearchTextBox"
+                     Height="46"
+                     FontSize="20"
+                     VerticalContentAlignment="Center"
+                     TextChanged="SearchTextBox_TextChanged"/>
+
+            <ListView x:Name="ResultListView"
+                      Grid.Row="2"
+                      BorderThickness="0"
+                      MouseDoubleClick="ResultListView_MouseDoubleClick">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Height="54">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="{Binding FavoriteText}" FontSize="18" Foreground="#F59E0B" HorizontalAlignment="Center" ToolTip="{Binding FavoriteDisplay}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding IconText}" FontSize="22" HorizontalAlignment="Center"/>
+                            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding TargetPath}" Foreground="#5F6875" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding GroupDisplay}" Foreground="#5F6875" HorizontalAlignment="Right"/>
+                                <TextBlock Text="{Binding OpenApplicationDisplay}" Foreground="#8A93A1" FontSize="11" HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </Border>
+</Window>
