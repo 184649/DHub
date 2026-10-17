@@ -85,7 +85,7 @@ public partial class MainWindow : Window
         InitializeTrayIcon();
         _ = RefreshLinkStatusAsync(false);
 
-        VersionTextBlock.Text = $"v{_updateService.CurrentVersion}";
+        VersionTextBlock.Text = $"v{_updateService.CurrentVersion}" + (_updateService.IsMsiInstalled ? " / MSI管理" : string.Empty);
 
         // 初回起動時はウィンドウを一切表示しないため、Loaded ではなく
         // コンストラクター完了後にバックグラウンドで自動更新確認を実行します。
@@ -2911,6 +2911,11 @@ public partial class MainWindow : Window
 
     private async Task CheckUpdateAsync(bool silent)
     {
+        if (_updateService.IsMsiInstalled)
+        {
+            if (!silent) ShowInfo(_updateService.InstalledUpdateMessage);
+            return;
+        }
         if (System.Reflection.Assembly.GetExecutingAssembly()
             .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()

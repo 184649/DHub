@@ -18,17 +18,33 @@ internal static class Program
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "DHub-StorageSafety-" + Guid.NewGuid().ToString("N"));
     private static int _failed;
     private static int _passed;
+    private static int _skipped;
 
     private static async Task<int> Main(string[] args)
     {
         if (args.Length == 1 && args[0] == "--exit-immediately") return 0;
+        if (args.Length == 2 && args[0] == "--probe-profile")
+        {
+            try { using var guard = ProfileInstanceLock.TryAcquire(args[1]); return guard is null ? 3 : 0; }
+            catch (IOException) { return 3; }
+        }
+        if (args.Length == 2 && args[0] == "--hold-profile")
+        {
+            using var guard = ProfileInstanceLock.TryAcquire(args[1]);
+            if (guard is null) return 3;
+            Console.WriteLine("PROFILE-LOCKED"); Console.Out.Flush();
+            Thread.Sleep(Timeout.Infinite);
+            return 0;
+        }
         Directory.CreateDirectory(Root);
         // No production profile is used, even by tests which exercise default constructors.
 
         await PackageTests();
         await UpdaterTests();
-        Console.WriteLine($"Storage safety: {_passed} passed, {_failed} failed.");
-        if (args.Length > 0) File.WriteAllText(Path.GetFullPath(args[0]), JsonSerializer.Serialize(new { passed = _passed, failed = _failed, results = Results }, new JsonSerializerOptions { WriteIndented = true }));
+        await InstalledModeTests();
+        await ProfileTests();
+        Console.WriteLine($"Storage safety: {_passed} passed, {_failed} failed, {_skipped} skipped.");
+        if (args.Length > 0) File.WriteAllText(Path.GetFullPath(args[0]), JsonSerializer.Serialize(new { passed = _passed, failed = _failed, skipped = _skipped, results = Results }, new JsonSerializerOptions { WriteIndented = true }));
         try { Directory.Delete(Root, true); } catch (IOException) { }
         return _failed == 0 ? 0 : 1;
     }
@@ -48,6 +64,15 @@ internal static class Program
             Results.Add(new { name, passed = false, error = ex.ToString() });
             Console.WriteLine("FAIL " + name + ": " + ex);
         }
+    }
+
+    private static Task WindowsTest(string name, Func<Task> action)
+    {
+        if (OperatingSystem.IsWindows()) return Test(name, action);
+        const string reason = "Windows named mutex/session semantics require the Windows CI runner.";
+        _skipped++; Results.Add(new { name, skipped = true, reason });
+        Console.WriteLine("SKIP " + name + ": " + reason);
+        return Task.CompletedTask;
     }
 
     private static string Fixture(string name)
@@ -289,4 +314,158 @@ internal static class Program
             True(!Process.GetCurrentProcess().HasExited, "Current test process was killed.");
         });
     }
+    private static async Task InstalledModeTests()
+    {
+        await Test("Portable mode remains available without an MSI marker", () => Run(() =>
+        {
+            var directory = Fixture("portable-mode");
+            File.WriteAllText(Path.Combine(directory, "unrelated.json"), "{}");
+            True(!InstallationMode.IsMsiManaged(directory), "Portable folder treated as MSI-managed.");
+            InstallationMode.ThrowIfMsiManaged(directory);
+        }));
+        foreach (var content in new[] { "{\"schemaVersion\":1,\"app\":\"DHub\",\"updateMode\":\"msi\"}", "broken json", "" })
+            await Test("MSI marker blocks all EXE update paths: " + (content.Length == 0 ? "empty" : content), async () =>
+            {
+                var directory = Fixture("installed-mode");
+                var marker = Path.Combine(directory, InstallationMode.MarkerFileName);
+                File.WriteAllText(marker, content);
+                var service = new UpdateService(directory);
+                True(service.IsMsiInstalled, "Marker was ignored.");
+                True(!service.IsPreviewBuild, "Test must exercise non-preview assembly version.");
+                try { await service.CheckAsync("http://invalid.example", new CancellationToken(canceled: true)); throw new Exception("Installed update check was allowed."); }
+                catch (InvalidOperationException ex) { Equal(InstallationMode.UpdateMessage, ex.Message); }
+                try { await service.StartUpdateAsync(new VersionInfo { Version = "999.0.0" }); throw new Exception("Installed EXE update was allowed."); }
+                catch (InvalidOperationException ex) { Equal(InstallationMode.UpdateMessage, ex.Message); }
+                var app = Path.Combine(directory, "DHub.exe"); var staged = Path.Combine(directory, "new.exe");
+                File.WriteAllBytes(app, Executable(1)); File.WriteAllBytes(staged, Executable(2));
+                await Throws<InvalidOperationException>(() => Run(() => Updater.InstallVerifiedExecutable(staged, app)));
+                True(Executable(1).SequenceEqual(File.ReadAllBytes(app)), "MSI application was changed.");
+                True(Executable(2).SequenceEqual(File.ReadAllBytes(staged)), "Refusal consumed staged executable.");
+                True(!File.Exists(app + ".bak"), "Refusal mutated installer files.");
+                Equal(content, File.ReadAllText(marker));
+            });
+        await Test("MSI marker directory also fails closed", async () =>
+        {
+            var directory = Fixture("marker-directory");
+            Directory.CreateDirectory(Path.Combine(directory, InstallationMode.MarkerFileName));
+            True(InstallationMode.IsMsiManaged(directory), "Marker directory was ignored.");
+            await Throws<InvalidOperationException>(() => Run(() => InstallationMode.ThrowIfMsiManaged(directory)));
+        });
+        await Test("Updater direct invocation refuses MSI before staging or waiting", async () =>
+        {
+            var directory = Fixture("installed-updater-direct"); var app = Path.Combine(directory, "DHub.exe");
+            File.WriteAllBytes(app, Executable(1));
+            File.WriteAllText(Path.Combine(directory, InstallationMode.MarkerFileName), "broken marker");
+            var method = typeof(Updater).GetMethod("Main", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            using var error = new StringWriter(); var previousError = Console.Error;
+            int exitCode;
+            try
+            {
+                Console.SetError(error);
+                exitCode = await (Task<int>)method.Invoke(null, new object[] { new[] {
+                    "--processId", Environment.ProcessId.ToString(), "--appPath", app,
+                    "--appSha256", new string('a', 64), "--appZipPath", Path.Combine(directory, "missing.zip"),
+                    "--dataDirectory", Path.Combine(directory, "profile") } })!;
+            }
+            finally { Console.SetError(previousError); }
+            Equal(1, exitCode);
+            True(error.ToString().Contains(InstallationMode.UpdateMessage), "Direct updater did not refuse installed mode first.");
+            True(Executable(1).SequenceEqual(File.ReadAllBytes(app)), "Direct updater changed MSI application.");
+            True(!File.Exists(app + ".bak"), "Direct updater created a backup.");
+            Equal(0, Directory.GetFiles(directory, "*.staged").Length);
+        });
+    }
+
+    private static async Task ProfileTests()
+    {
+        await Test("Profile default preserves preview and stable separation", () => Run(() =>
+        {
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            Equal(Path.GetFullPath(Path.Combine(local, "DHub-Preview")), AppProfile.ResolveDataDirectory(Array.Empty<string>(), true));
+            Equal(Path.GetFullPath(Path.Combine(local, "DHub")), AppProfile.ResolveDataDirectory(Array.Empty<string>(), false));
+        }));
+        await Test("Profile explicit directory preserves spaces and normalizes aliases", () => Run(() =>
+        {
+            var custom = Path.Combine(Fixture("custom profile"), "child", "..");
+            var expected = Path.TrimEndingDirectorySeparator(Path.GetFullPath(custom));
+            Equal(expected, AppProfile.ResolveDataDirectory(new[] { "--data-dir", custom }, true));
+            Equal(expected, AppProfile.ResolveDataDirectory(new[] { "--data-dir", custom }, false));
+            Equal(Path.GetFullPath("relative profile"), AppProfile.ResolveDataDirectory(new[] { "--data-dir", "relative profile" }, false));
+        }));
+        await Test("Profile arguments reject incomplete or unexpected options", async () =>
+        {
+            foreach (var args in new[] { new[] { "--data-dir" }, new[] { "--data-dir", " " }, new[] { "--unknown", "path" }, new[] { "--data-dir", "path", "extra" } })
+                await Throws<ArgumentException>(() => Run(() => AppProfile.ResolveDataDirectory(args, true)));
+        });
+        await WindowsTest("Profile lock permits independent profiles and reacquisition after exit", () => Run(() =>
+        {
+            var first = Fixture("profile-one"); var second = Fixture("profile-two");
+            using (var one = ProfileInstanceLock.TryAcquire(first))
+            using (var two = ProfileInstanceLock.TryAcquire(second))
+                True(one is not null && two is not null, "Independent profiles interfered.");
+            using var reopened = ProfileInstanceLock.TryAcquire(first);
+            True(reopened is not null, "Normal exit retained ownership.");
+        }));
+        await WindowsTest("Profile lock refuses second process with normalized same directory", () => Run(() =>
+        {
+            var directory = Fixture("profile-process");
+            using var guard = ProfileInstanceLock.TryAcquire(directory);
+            True(guard is not null, "Initial owner failed.");
+            using var probe = StartProfileProcess("--probe-profile", directory + Path.DirectorySeparatorChar);
+            True(probe.WaitForExit(15000), "Profile probe timed out.");
+            Equal(3, probe.ExitCode);
+        }));
+        await WindowsTest("Profile file lock failure releases mutex and preserves sentinel", () => Run(() =>
+        {
+            var directory = Fixture("profile-file-lock"); var path = Path.Combine(directory, ".instance.lock");
+            File.WriteAllText(path, "sentinel");
+            using (var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                try { using var failed = ProfileInstanceLock.TryAcquire(directory); throw new Exception("Existing exclusive lock was ignored."); }
+                catch (IOException) { }
+            }
+            using var guard = ProfileInstanceLock.TryAcquire(directory);
+            if (guard is null) throw new Exception("Failed acquisition leaked named mutex ownership.");
+            guard.Dispose();
+            guard.Dispose();
+            Equal("sentinel", File.ReadAllText(path));
+        }));
+        await WindowsTest("Profile startup failure releases ownership without touching other files", () => Run(() =>
+        {
+            var directory = Path.Combine(Fixture("profile-invalid"), "not-a-directory");
+            File.WriteAllText(directory, "existing user data");
+            try { using var failed = ProfileInstanceLock.TryAcquire(directory); throw new Exception("Invalid data folder was accepted."); }
+            catch (IOException) { }
+            Equal("existing user data", File.ReadAllText(directory));
+            File.Delete(directory);
+            using var guard = ProfileInstanceLock.TryAcquire(directory);
+            True(guard is not null, "Startup failure leaked ownership.");
+        }));
+        await WindowsTest("Profile abandoned process lock is recoverable", () => Run(() =>
+        {
+            var directory = Fixture("profile-abandoned");
+            using var owner = StartProfileProcess("--hold-profile", directory);
+            try
+            {
+                var ready = owner.StandardOutput.ReadLineAsync();
+                True(ready.Wait(TimeSpan.FromSeconds(15)), "Owner did not acquire profile lock.");
+                Equal("PROFILE-LOCKED", ready.Result);
+                // Only terminate this synthetic regression-test child, never an app.
+                owner.Kill(); True(owner.WaitForExit(15000), "Test child did not exit.");
+                using var recovered = ProfileInstanceLock.TryAcquire(directory);
+                True(recovered is not null, "Abandoned lock prevented restart.");
+            }
+            finally { if (!owner.HasExited) { owner.Kill(); owner.WaitForExit(); } }
+        }));
+    }
+
+    private static Process StartProfileProcess(string option, string directory)
+    {
+        var start = new ProcessStartInfo { FileName = Environment.ProcessPath!, UseShellExecute = false, RedirectStandardOutput = true };
+        if (Path.GetFileNameWithoutExtension(start.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        start.ArgumentList.Add(option); start.ArgumentList.Add(directory);
+        return Process.Start(start) ?? throw new InvalidOperationException("Unable to start profile regression fixture.");
+    }
+
 }

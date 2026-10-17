@@ -17,7 +17,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-set OUT_DIR=bin\Release\net8.0-windows\win-x64\publish
+set OUT_DIR=bin\Release\net10.0-windows\win-x64\publish
 set EXE_NAME=DHub.exe
 
 if not exist "%OUT_DIR%\%EXE_NAME%" (
@@ -42,3 +42,4 @@ echo DONE
 echo release\DHub.exe
 
 pause
+

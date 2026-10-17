@@ -14,12 +14,19 @@ public sealed class UpdateService
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly SemaphoreSlim _updateGate = new(1, 1);
     private bool _updateStarted;
+    private readonly string _applicationDirectory;
+
+    public UpdateService() : this(AppContext.BaseDirectory) { }
+    internal UpdateService(string applicationDirectory) => _applicationDirectory = Path.GetFullPath(applicationDirectory);
+    public bool IsMsiInstalled => InstallationMode.IsMsiManaged(_applicationDirectory);
+    public string InstalledUpdateMessage => InstallationMode.UpdateMessage;
 
     public string CurrentVersion { get; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
     public bool IsPreviewBuild => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase) == true;
 
     public async Task<VersionInfo?> CheckAsync(string versionUrl, CancellationToken cancellationToken = default)
     {
+        InstallationMode.ThrowIfMsiManaged(_applicationDirectory);
         if (IsPreviewBuild) throw new InvalidOperationException("検証版は自動更新の対象外です。このブランチから再ビルドして更新してください。");
         if (string.IsNullOrWhiteSpace(versionUrl)) return null;
         ValidateManifestUrl(versionUrl);
@@ -54,6 +61,7 @@ public sealed class UpdateService
         try
         {
             if (_updateStarted) return false;
+            InstallationMode.ThrowIfMsiManaged(_applicationDirectory);
             if (IsPreviewBuild) throw new InvalidOperationException("検証版は自動更新の対象外です。このブランチから再ビルドして更新してください。");
             if (!IsNewer(info.Version)) throw new InvalidDataException("更新先は現在より新しいバージョンである必要があります。");
             UpdatePackageSafety.ValidatePackageUrl(info.DownloadUrl);
@@ -64,6 +72,7 @@ public sealed class UpdateService
             if (!Path.GetFileName(currentExe).Equals("DHub.exe", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("自動更新は配布版 DHub.exe から実行してください。");
             var appDirectory = Path.GetDirectoryName(currentExe)!;
+            InstallationMode.ThrowIfMsiManaged(appDirectory);
             if (File.Exists(Path.Combine(appDirectory, "DHub.dll")) || File.Exists(Path.Combine(appDirectory, "DHub.runtimeconfig.json")))
                 throw new InvalidOperationException("自動更新は単一 EXE の配布版のみ対応しています。開発用ビルドは手動でビルドまたは更新してください。");
             dataDirectory = Path.GetFullPath(dataDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DHub"));

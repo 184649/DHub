@@ -6,13 +6,21 @@ permissions:
   contents: read
 jobs:
   validate:
+    if: github.event.repository.private == false
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Select preinstalled .NET 10 SDK (no installation)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installed = @(dotnet --list-sdks)
+          $installed | Write-Host
+          $sdk = $installed | ForEach-Object { if ($_ -match '^(10\.0\.\d+) ') { $Matches[1] } } | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+          if (-not $sdk) { throw 'Preinstalled .NET 10 SDK is required; automatic installation is disabled.' }
+          @{ sdk = @{ version = $sdk; rollForward = 'disable' } } | ConvertTo-Json -Depth 3 | Set-Content global.json -Encoding utf8
+          dotnet --info
       - name: Remove historical build outputs from checkout
         shell: pwsh
         run: |
@@ -20,8 +28,23 @@ jobs:
       - name: Compile WPF application and updater
         run: dotnet build DHub.sln -c Release --no-incremental
       - name: Storage regression
-        run: dotnet run --project tests/StorageRegression/StorageRegression.csproj -c Release
+        shell: pwsh
+        run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/StorageRegression/StorageRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\StorageRegression"
       - name: Launcher regression
-        run: dotnet run --project tests/LauncherRegression/LauncherRegression.csproj -c Release
+        shell: pwsh
+        run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/LauncherRegression/LauncherRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\LauncherRegression"
       - name: Updater regression
-        run: dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release
+        shell: pwsh
+        run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/UpdaterRegression/UpdaterRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\UpdaterRegression"
+      - name: Legacy profile import regression (synthetic data only)
+        shell: pwsh
+        run: ./tests/ProfileImport.Tests.ps1
+      - name: Exercise the same local Build.cmd entry (build only)
+        shell: pwsh
+        run: |
+          cmd /c Build.cmd --ci -OutputDirectory "$env:RUNNER_TEMP\local-build"
+          if ($LASTEXITCODE -ne 0) { throw "Build.cmd failed: $LASTEXITCODE" }
+          Get-ChildItem "$env:RUNNER_TEMP\local-build" -Filter local-build.json -Recurse | ForEach-Object { Get-Content $_.FullName -Raw | Write-Host }
+      - name: MSI isolated install, repair, upgrade and uninstall regression
+        shell: pwsh
+        run: ./packaging/Test-Installer.ps1 -TargetFramework net10.0-windows -OutputDirectory "$env:RUNNER_TEMP\installer-fixtures" -AllowDisposableUserProfile

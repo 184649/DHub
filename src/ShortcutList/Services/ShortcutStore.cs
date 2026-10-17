@@ -20,6 +20,7 @@ public class ShortcutStore
     private Dictionary<string, string?>? _observedFiles;
     private bool _preserveBeforeSave;
     private bool _hasLoaded;
+    private bool _unsupportedSchema;
 
     public ObservableCollection<ShortcutItem> Items { get; } = new();
     public ObservableCollection<WorkspaceItem> Workspaces { get; } = new();
@@ -62,6 +63,7 @@ public class ShortcutStore
             StorageConflictSummary = string.Empty;
             WasRecoveredOnLoad = false;
             IsReadOnly = false;
+            _unsupportedSchema = false;
             _combinedCandidate = null;
             _separatedCandidate = null;
             _preserveBeforeSave = false;
@@ -77,7 +79,7 @@ public class ShortcutStore
                 {
                     if (StorageFile.Exists(_storagePath)) data = ReadDataFromFile(_storagePath);
                 }
-                catch (Exception ex) when (IsStorageException(ex)) { mainError = ex.Message; }
+                catch (Exception ex) when (IsStorageException(ex) && ex is not UnsupportedStorageSchemaException) { mainError = ex.Message; }
 
                 if (data is null)
                 {
@@ -128,7 +130,7 @@ public class ShortcutStore
                             MarkConflict("統合ファイルと分離ファイルの内容が一致しません。統合側の内容を表示しています。保存を停止しました。");
                         }
                     }
-                    catch (Exception ex) when (IsStorageException(ex))
+                    catch (Exception ex) when (IsStorageException(ex) && ex is not UnsupportedStorageSchemaException)
                     {
                         MarkConflict("分離ファイルの検証に失敗しました。統合側の内容を表示しています。保存を停止しました。\n" + ex.Message);
                     }
@@ -138,6 +140,13 @@ public class ShortcutStore
             }
             catch (Exception ex) when (IsStorageException(ex))
             {
+                if (ex is UnsupportedStorageSchemaException)
+                {
+                    _unsupportedSchema = true;
+                    WasRecoveredOnLoad = false;
+                    _combinedCandidate = null;
+                    _separatedCandidate = null;
+                }
                 // Do not clear live collections here: Reload must retain the last usable view.
                 IsReadOnly = true;
                 LastLoadMessage = "読み取り専用で起動します。ファイルは変更していません。\n" + ex.Message;
@@ -192,7 +201,7 @@ public class ShortcutStore
                 recoveredFrom = candidate;
                 return true;
             }
-            catch (Exception ex) when (IsStorageException(ex)) { error = ex.Message; }
+            catch (Exception ex) when (IsStorageException(ex) && ex is not UnsupportedStorageSchemaException) { error = ex.Message; }
         }
         return false;
     }
@@ -236,6 +245,7 @@ public class ShortcutStore
 
     private void EnsureWritable()
     {
+        EnsureSupportedSchema();
         if (IsReadOnly) throw new InvalidOperationException("データ保護のため読み取り専用です。元データを確認し、復元または分離データの選択を行ってください。");
         if (!_hasLoaded)
         {
@@ -244,6 +254,11 @@ public class ShortcutStore
             _observedFiles = CaptureFiles(Settings.EnableSeparatedDataFiles);
             _hasLoaded = true;
         }
+    }
+
+    private void EnsureSupportedSchema()
+    {
+        if (_unsupportedSchema) throw new UnsupportedStorageSchemaException();
     }
 
     private void VerifySeparatedModeChange()
@@ -260,6 +275,14 @@ public class ShortcutStore
             if (_separatedCandidate is null || SameSnapshot(proposed, _separatedCandidate)) return;
             _combinedCandidate = proposed;
             MarkConflict("分離保存を有効にする前に、既存の分離ファイルとの違いを確認してください。");
+        }
+        catch (UnsupportedStorageSchemaException)
+        {
+            _unsupportedSchema = true;
+            IsReadOnly = true;
+            _combinedCandidate = null;
+            _separatedCandidate = null;
+            throw;
         }
         catch (Exception ex) when (IsStorageException(ex))
         {
@@ -289,8 +312,17 @@ public class ShortcutStore
         return staged;
     }
 
-    private T ReadComponent<T>(string path) where T : class => JsonSerializer.Deserialize<T>(File.ReadAllText(path), _options)
-        ?? throw new InvalidDataException($"空の分離データです: {Path.GetFileName(path)}");
+    private T ReadComponent<T>(string path) where T : class
+    {
+        var json = File.ReadAllText(path);
+        if (typeof(T) == typeof(AppSettings))
+        {
+            using var document = JsonDocument.Parse(json);
+            StorageIntegrity.ValidateSchema(document.RootElement, combined: false);
+        }
+        return JsonSerializer.Deserialize<T>(json, _options)
+            ?? throw new InvalidDataException($"空の分離データです: {Path.GetFileName(path)}");
+    }
 
     private void SaveSeparatedDataFiles(AppData data)
     {
@@ -312,6 +344,7 @@ public class ShortcutStore
     {
         lock (_saveLock)
         {
+            EnsureSupportedSchema();
             var candidate = useSeparated ? _separatedCandidate : _combinedCandidate;
             if (candidate is null) throw new InvalidOperationException("選択したデータは検証できていません。");
             var selected = Clone(candidate);
@@ -701,6 +734,7 @@ public class ShortcutStore
     {
         lock (_saveLock)
         {
+            EnsureSupportedSchema();
             var data = ReadDataFromFile(backupPath); // Validate before changing or archiving anything.
             VerifyFilesUnchanged();
             PreserveRawFiles();
@@ -784,6 +818,7 @@ public class ShortcutStore
     private AppData ReadData(string json)
     {
         using var document = JsonDocument.Parse(json);
+        StorageIntegrity.ValidateSchema(document.RootElement, combined: true);
         if (document.RootElement.ValueKind != JsonValueKind.Object ||
             !document.RootElement.TryGetProperty(nameof(AppData.Items), out var items) || items.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("登録一覧を含む有効な保存データではありません。");

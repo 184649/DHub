@@ -1,4 +1,5 @@
 using System.Windows;
+using ShortcutList.Services;
 using ShortcutList.Views;
 
 namespace ShortcutList;
@@ -6,6 +7,7 @@ namespace ShortcutList;
 public partial class App : System.Windows.Application
 {
     private MainWindow? _mainWindow;
+    private ProfileInstanceLock? _profileLock;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,29 +21,47 @@ public partial class App : System.Windows.Application
                 args.Handled = true;
             }
         };
-        base.OnStartup(e);
-
-        string? dataDirectory = null;
-        if (e.Args.Length > 0)
+        try
         {
-            if (e.Args.Length != 2 || e.Args[0] != "--data-dir" || string.IsNullOrWhiteSpace(e.Args[1]))
+            base.OnStartup(e);
+            if (e.Args.Length != 0 && (e.Args.Length != 2 || e.Args[0] != "--data-dir" || string.IsNullOrWhiteSpace(e.Args[1])))
             {
-                System.Windows.MessageBox.Show("使用方法: DHub.exe [--data-dir 保存先フォルダー]", "DHub");
+                System.Windows.MessageBox.Show(AppProfile.UsageMessage, "DHub");
                 Shutdown(2);
                 return;
             }
-            dataDirectory = System.IO.Path.GetFullPath(e.Args[1]);
+            var isPreviewBuild = System.Reflection.Assembly.GetExecutingAssembly()
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .Any(a => a.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase));
+            var dataDirectory = AppProfile.ResolveDataDirectory(e.Args, isPreviewBuild);
+            // Acquire before MainWindow constructs/loads ShortcutStore or starts
+            // background work. --data-dir and preview isolation remain unchanged.
+            _profileLock = ProfileInstanceLock.TryAcquire(dataDirectory);
+            if (_profileLock is null)
+            {
+                System.Windows.MessageBox.Show("このデータフォルダーを使うDHubは既に起動しています。タスクトレイから開いてください。", "DHub");
+                Shutdown();
+                return;
+            }
+            _mainWindow = new MainWindow(dataDirectory);
+            MainWindow = _mainWindow;
+            _mainWindow.ShowInitialWindow();
         }
-        else if (System.Reflection.Assembly.GetExecutingAssembly()
-            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
-            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
-            .Any(a => a.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase)))
+        catch (Exception ex)
         {
-            dataDirectory = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DHub-Preview");
+            try
+            {
+                System.Windows.MessageBox.Show($"DHubを起動できませんでした。保存先・権限・同じデータを使う別プロセスを確認してください。\n{ex.GetBaseException().Message}",
+                    "DHub 起動エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally { Shutdown(1); }
         }
-        _mainWindow = new MainWindow(dataDirectory);
-        MainWindow = _mainWindow;
-        _mainWindow.ShowInitialWindow();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try { _profileLock?.Dispose(); }
+        finally { base.OnExit(e); }
     }
 }
-

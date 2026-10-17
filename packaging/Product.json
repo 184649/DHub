@@ -1,0 +1,11 @@
+{
+  "app": "DHub",
+  "project": "src/ShortcutList/ShortcutList.csproj",
+  "icon": "src/ShortcutList/Assets/DHub.ico",
+  "manufacturer": "DHub Project",
+  "upgradeCode": "231751C2-573D-4172-B179-84C0A8B63C82",
+  "installFolder": "DHub-Preview",
+  "productName": "DHub Preview",
+  "registryKey": "Software\\DHub\\PreviewInstaller",
+  "dataFolder": "DHub-Preview"
+}

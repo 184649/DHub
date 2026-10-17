@@ -4,7 +4,7 @@ Windows 向けのファイル・フォルダー・URL ランチャーです。�
 
 ## プレビューを起動する
 
-Windows 10/11 と [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) が必要です。GUI アプリは Linux では起動できません。
+Windows 10/11 と [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) が必要です。GUI アプリは Linux では起動できません。
 
 PowerShell で実行します。
 
@@ -44,3 +44,12 @@ dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release
 - [起動後の確認・制限・回復手順](docs/VALIDATION_JA.md)
 - [全改善項目の対応台帳](docs/IMPROVEMENT_LEDGER_JA.md)
 - [正式配布時の更新手順](docs/UPDATE.md)
+
+## ローカル確認用インストーラ
+
+.NET 10 を同梱するユーザー単位のMSIを生成します。インストール先は通常profileと別の `%LOCALAPPDATA%\Programs\DHub-Preview` です。新規導入、同版の修復、上位版への更新、データを残すアンインストールに対応する構成です。旧portable版のデータは自動移動しません。
+
+- [MSIの作成・試用・更新と制約](docs/INSTALLER.md)
+- [既存profileからの任意の非破壊コピー](docs/PROFILE_IMPORT.md)
+
+インストーラは署名していません。Windowsのセキュリティ警告を回避する設定変更は案内しません。一般公開・自動更新配布はこの検証には含めません。ソースからの生成には既設.NET10 SDK、PowerShell7、WiX3.14.1が必要です。ビルドscriptは不足toolを自動インストールしません。実行するアプリには.NETの別途導入は不要です。
