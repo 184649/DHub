@@ -28,6 +28,13 @@
             <WrapPanel Orientation="Horizontal"
                        HorizontalAlignment="Stretch"
                        VerticalAlignment="Top">
+                <Button Style="{StaticResource PrimaryButtonStyle}" Click="ShowLauncherBarButton_Click" Content="固定バーを表示"
+                        ToolTip="お気に入りのファイル・フォルダー・URLをワンクリックで開く固定バーを表示します" Margin="0,0,8,8"/>
+                <Button Style="{StaticResource ToolbarButtonStyle}" Click="PinSelectionButton_Click" Content="選択をバーに追加"
+                        ToolTip="一覧で選択した項目をお気に入りにして固定バーの末尾に追加します" Margin="0,0,8,8"/>
+                <Button Style="{StaticResource ToolbarButtonStyle}" Click="BookmarkSourcesButton_Click" Content="フォルダー連携"
+                        ToolTip="既存の .lnk / .url などを含むフォルダーを、元ファイルを変更せずメニューに表示します" Margin="0,0,8,8"/>
+
                 <Button Style="{StaticResource ToolbarButtonStyle}" Click="AddButton_Click" Margin="0,0,8,8">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock FontSize="20" Foreground="#16A34A" Text="＋"/>
@@ -167,7 +174,7 @@
                 <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="|" Margin="0,0,10,2"/>
                 <TextBlock x:Name="VersionTextBlock" Foreground="{StaticResource SecondaryTextBrush}" Text="v1.0.0" Margin="0,0,10,2"/>
                 <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="|" Margin="0,0,10,2"/>
-                <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="Ctrl+Shift+Space クイック検索 / Ctrl+Shift+P 統合検索 / Ctrl+Shift+D 管理画面 / Ctrl+F 検索 / Ctrl+N 追加 / ★列クリックでお気に入り / 右クリックで操作 / Enterで開く" Margin="0,0,0,2"/>
+                <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="Ctrl+Shift+Space クイック検索 / Ctrl+Shift+P 統合検索 / Ctrl+Shift+D 管理画面 / Ctrl+F 検索 / Ctrl+N 追加 / ★列で固定バーに追加・解除 / バーの右クリックで左右に移動 / Enterで開く" Margin="0,0,0,2"/>
             </WrapPanel>
         </Border>
 
@@ -247,7 +254,7 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Cursor="Hand"
-                                               ToolTip="クリックでお気に入り登録/解除"
+                                               ToolTip="クリックで固定バーに追加/解除（お気に入り）"
                                                MouseLeftButtonDown="FavoriteCell_MouseLeftButtonDown"/>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>

@@ -27,6 +27,14 @@ public partial class ShortcutEditWindow : Window
         RefreshOpenApplicationCandidates();
     }
 
+    public void ConfigureForPinnedAdd()
+    {
+        Title = "固定バーに追加（ファイル・フォルダー・URL）";
+        FavoriteCheckBox.IsChecked = true;
+        FavoriteCheckBox.IsEnabled = false;
+        FavoriteCheckBox.Content = "固定バーに追加（お気に入り）";
+    }
+
     public ShortcutEditWindow(ShortcutItem item)
     {
         InitializeComponent();

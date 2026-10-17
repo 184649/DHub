@@ -7,6 +7,78 @@ void Check(bool condition, string name)
     if (!condition) throw new InvalidOperationException("FAIL: " + name);
     total++; Console.WriteLine("PASS " + name);
 }
+var ordering = LauncherBarLayout.OrderedIds(new[]
+{
+    new LauncherPin("z", "Same", 7), new LauncherPin("a", "Same", 7),
+    new LauncherPin("first", "Z", -2), new LauncherPin("last", "A", 99)
+});
+Check(ordering.SequenceEqual(new[] { "first", "a", "z", "last" }), "pins preserve SortOrder with deterministic duplicate-name ties");
+var reordered = LauncherBarLayout.Move(ordering, "z", -1);
+Check(reordered.SequenceEqual(new[] { "first", "z", "a", "last" }) && ordering[1] == "a", "move-left swaps adjacent pins without mutating input");
+Check(LauncherBarLayout.Move(reordered, "z", 1).SequenceEqual(ordering), "move-right restores exact pin order");
+Check(LauncherBarLayout.Move(ordering, "first", -1).SequenceEqual(ordering) &&
+    LauncherBarLayout.Move(ordering, "last", 1).SequenceEqual(ordering), "boundary moves do not wrap");
+Check(LauncherBarLayout.Move(ordering, "missing", 1).SequenceEqual(ordering) &&
+    LauncherBarLayout.Move(ordering, "a", 20).SequenceEqual(ordering), "stale selections and unsupported moves are no-ops");
+Check(LauncherBarLayout.Move(Array.Empty<string>(), "missing", -1).Count == 0, "empty pin list is safe");
+var area = new LauncherBounds(0, 0, 1920, 1040);
+var position = LauncherBarLayout.Place(area, 500, 48);
+Check(position == new LauncherPosition(8, 984), "first bar placement stays above taskbar work area");
+Check(LauncherBarLayout.Place(area, 500, 48, 300, 400) == new LauncherPosition(300, 400), "saved visible position is retained");
+Check(LauncherBarLayout.Place(area, 500, 48, 9000, -999) == new LauncherPosition(1420, 0), "offscreen position is clamped after display changes");
+Check(LauncherBarLayout.Place(new(-1920, -100, 1920, 1080), 500, 48, -5000, 2000) == new LauncherPosition(-1920, 932), "negative-coordinate secondary monitors are supported");
+Check(LauncherBarLayout.Place(new(20, 30, 100, 80), 500, 200, 999, 999) == new LauncherPosition(20, 30), "oversized bar has safe origin in a small work area");
+Check(LauncherBarLayout.Place(area, 500, 48, double.NaN, double.PositiveInfinity) == position, "nonfinite positions fall back safely");
+Check(LauncherBarLayout.VisiblePinCount(30, 1920) == 8 && LauncherBarLayout.VisiblePinCount(30, 800) == 4,
+    "visible pins are capped with room for overflow controls");
+Check(LauncherBarLayout.VisiblePinCount(3, 1920) == 3 && LauncherBarLayout.VisiblePinCount(30, 200) == 0 &&
+    LauncherBarLayout.VisiblePinCount(0, 1920) == 0, "empty and narrow bars never lose overflow access");
+var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"SchemaVersion\":4,\"ShowLauncherBar\":false}")!;
+Check(settings.LauncherBarLeft is null && settings.LauncherBarTop is null && !settings.ShowLauncherBar,
+    "older settings keep visibility preference and first-use placement");
+settings.LauncherBarLeft = -1400; settings.LauncherBarTop = 802;
+var settingsCopy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(System.Text.Json.JsonSerializer.Serialize(settings))!;
+Check(settingsCopy.LauncherBarLeft == -1400 && settingsCopy.LauncherBarTop == 802, "bar position roundtrips with existing settings schema");
+
+var recipe = new LauncherPinRecipe("https://example.invalid/Case", "", "", "", 1);
+Check(recipe == new LauncherPinRecipe("https://example.invalid/Case", "", "", "", 1), "equivalent drop recipes can reuse an existing registration");
+Check(recipe != recipe with { Arguments = "--profile work" } && recipe != recipe with { OpenApplicationPath = "browser.exe" } &&
+    recipe != recipe with { OpenApplicationArguments = "--private" }, "different arguments and application recipes remain distinct");
+Check(recipe != recipe with { TargetPath = "https://example.invalid/case" } && recipe != recipe with { ShortcutType = 2 },
+    "target case and original shell file type are preserved");
+var mutation = 0; var pinSaves = 0; var rollbacks = 0;
+var editError = LauncherBarLayout.SaveEdit(() => mutation = 1, () => pinSaves++, () => { mutation = 0; rollbacks++; });
+Check(editError is null && mutation == 1 && pinSaves == 1 && rollbacks == 0, "pin save succeeds once without rollback");
+editError = LauncherBarLayout.SaveEdit(() => mutation = 2, () => { pinSaves++; throw new IOException("disk full"); }, () => { mutation = 1; rollbacks++; });
+Check(editError is IOException && mutation == 1 && pinSaves == 2 && rollbacks == 1, "failed pin save restores prior state and never retries");
+editError = LauncherBarLayout.SaveEdit(() => { mutation = 3; throw new InvalidOperationException("stale selection"); },
+    () => pinSaves++, () => { mutation = 1; rollbacks++; });
+Check(editError is InvalidOperationException && mutation == 1 && pinSaves == 2 && rollbacks == 2, "failed edit restores prior state without saving partial mutation");
+Check(LauncherBarLayout.VisiblePinCount(50, double.MaxValue) == 8, "huge finite width cannot overflow visible-pin arithmetic");
+
+var boundPin = new LauncherPin("one", "Unchanged", 0);
+var boundPins = new[] { boundPin };
+Check(LauncherBarLayout.SameInstances(boundPins, new[] { boundPin }), "history-only changes retain live bindings and focus");
+Check(!LauncherBarLayout.SameInstances(boundPins, new[] { new LauncherPin("one", "Unchanged", 0) }),
+    "reload with equal pin values requires fresh callbacks to new instances");
+Check(!LauncherBarLayout.SameInstances(boundPins, Array.Empty<LauncherPin>()), "removed pins invalidate live bindings");
+
+var collidingLabels = new[]
+{
+    new LauncherPin("a", "prefix-middle-one-suffix", 0), new LauncherPin("b", "prefix-middle-two-suffix", 1)
+};
+Check(LauncherBarLayout.Label("a", collidingLabels[0].Name, 13, collidingLabels) == "[1] prefix…suffix" &&
+    LauncherBarLayout.Label("b", collidingLabels[1].Name, 13, collidingLabels) == "[2] prefix…suffix",
+    "different long names with identical compact labels have visible prefix discriminators");
+var sameLabels = new[] { new LauncherPin("b", "日本語の同名ファイル", 0), new LauncherPin("a", "日本語の同名ファイル", 1) };
+Check(LauncherBarLayout.Label("a", sameLabels[1].Name, 13, sameLabels).StartsWith("[1] "),
+    "exact duplicate names put their stable discriminator before any clipped text");
+Check(LauncherBarLayout.Label("a", "unique", 13, new[] { new LauncherPin("a", "unique", 0) }) == "unique",
+    "unique short names need no extra label clutter");
+Check(LauncherBarLayout.CompactName("😀😀😀middle😀😀😀", 7) == "😀😀😀…😀😀😀", "compact names never split surrogate pairs");
+Check(LauncherBarLayout.VisiblePinCount(20, 743) == 3 && LauncherBarLayout.VisiblePinCount(20, 744) == 4,
+    "visible pin boundary reserves all 248 DIP of actual controls");
+
 var requests = 0; var saves = 0;
 var outcome = LaunchCoordinator.Execute(() => requests++, () => saves++);
 Check(outcome.Requested && requests == 1 && saves == 1 && outcome.HistoryError is null, "successful request records history once");

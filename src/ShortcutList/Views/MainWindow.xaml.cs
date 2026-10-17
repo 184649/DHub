@@ -1178,12 +1178,7 @@ public partial class MainWindow : Window
 
     private void ToggleFavorite(ShortcutItem item)
     {
-        if (!EnsureEditingAllowed()) return;
-        item.IsFavorite = !item.IsFavorite;
-        item.TouchUpdated();
-        _store.Save();
-        _store.AddLog("Favorite", item.IsFavorite ? "お気に入り登録" : "お気に入り解除", item.Name);
-        ApplyFilter();
+        SetPinnedItems(new[] { item }, !item.IsFavorite);
     }
 
     private void FavoriteButton_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -1243,7 +1238,16 @@ public partial class MainWindow : Window
         AddMenuItem(menu, "開く", () => LaunchItem(item));
         AddMenuItem(menu, "場所を開く", () => ShortcutRunner.OpenFolder(item.TargetPath));
         menu.Items.Add(new Separator());
-        AddMenuItem(menu, item.IsFavorite ? "お気に入り解除" : "お気に入り登録", () => ToggleFavorite(item));
+        AddMenuItem(menu, item.IsFavorite ? "固定バーから外す（登録は残す）" : "固定バーに追加", () =>
+        {
+            var pin = !item.IsFavorite;
+            if (SetPinnedItems(new[] { item }, pin) && pin) SetLauncherBarVisible(true);
+        });
+        if (item.IsFavorite)
+        {
+            AddMenuItem(menu, "固定バーで左へ移動", () => MovePinnedItem(item, -1));
+            AddMenuItem(menu, "固定バーで右へ移動", () => MovePinnedItem(item, 1));
+        }
         AddMenuItem(menu, "開くアプリを候補から選択...", () => SelectOpenApplication(item));
         AddMenuItem(menu, "開くアプリを既定に戻す", () => ResetOpenApplication(item));
         menu.Items.Add(new Separator());
@@ -1340,6 +1344,7 @@ public partial class MainWindow : Window
 
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        if (!EnsureEditingAllowed()) { e.Handled = true; return; }
         var added = false;
         var duplicateCount = 0;
 

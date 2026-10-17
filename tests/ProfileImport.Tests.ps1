@@ -291,6 +291,36 @@ try {
         Write-FixtureJson $path $data
         Assert-Throws { Import-Fixture $f } 'missing shortcut ID'
     }
+    Invoke-Case 'launcher bar coordinates remain canonical and preserve bytes' {
+        param($f)
+        $path = Join-Path $f.Source 'shortcuts.json'
+        $data = [IO.File]::ReadAllText($path) | ConvertFrom-Json -AsHashtable
+        $data.Settings.LauncherBarLeft = -1440
+        $data.Settings.LauncherBarTop = 804
+        Write-FixtureJson $path $data
+        Write-FixtureJson (Join-Path $f.Source 'settings.data.json') $data.Settings
+        $result = Import-Fixture $f
+        Assert-AppFixtureResult $f $result
+    }
+    Invoke-Case 'unset launcher bar coordinates remain canonical' {
+        param($f)
+        $path = Join-Path $f.Source 'shortcuts.json'
+        $data = [IO.File]::ReadAllText($path) | ConvertFrom-Json -AsHashtable
+        $data.Settings.LauncherBarLeft = $null
+        $data.Settings.LauncherBarTop = $null
+        Write-FixtureJson $path $data
+        Write-FixtureJson (Join-Path $f.Source 'settings.data.json') $data.Settings
+        $result = Import-Fixture $f
+        Assert-AppFixtureResult $f $result
+    }
+    Invoke-Case 'invalid launcher bar coordinates fail closed' {
+        param($f)
+        $path = Join-Path $f.Source 'shortcuts.json'
+        $data = [IO.File]::ReadAllText($path) | ConvertFrom-Json -AsHashtable
+        $data.Settings.LauncherBarLeft = 'offscreen'
+        Write-FixtureJson $path $data
+        Assert-Throws { Import-Fixture $f } 'Invalid field type'
+    }
     Invoke-Case 'future nested settings schema cannot recover' {
         param($f)
         $path = Join-Path $f.Source 'shortcuts.json'

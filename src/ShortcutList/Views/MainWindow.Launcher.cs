@@ -55,7 +55,6 @@ public partial class MainWindow
         if (_store.Settings.ShowLauncherBar) ShowLauncherBar();
     }
 
-    private static string CompactLabel(string value, int limit) => value.Length <= limit ? value : value[..(limit / 2)] + "…" + value[^(limit / 2)..];
     private static string MenuText(string value) => value.Replace("&", "&&");
     private static string Recipe(ShortcutItem item) =>
         System.Text.Json.JsonSerializer.Serialize(new { item.Id, item.TargetPath, item.Arguments,
@@ -64,10 +63,8 @@ public partial class MainWindow
     private Forms.ToolStripMenuItem CreateLaunchMenuItem(ShortcutItem item)
     {
         var recipe = Recipe(item);
-        var suffix = string.IsNullOrWhiteSpace(item.Arguments) ? item.OpenApplicationDisplay : item.Arguments;
-        var disambiguator = _store.Items.Count(x => x.Name == item.Name) > 1 ? $" [{item.Id[..Math.Min(6, item.Id.Length)]}]" : "";
-        var row = new Forms.ToolStripMenuItem(MenuText($"{item.IconText} {CompactLabel(item.Name, 40)}{disambiguator} · {CompactLabel(suffix, 30)} · {CompactLabel(item.TargetPath, 56)}"))
-        { ToolTipText = $"{item.TargetPath}\n{item.OpenApplicationPath} {item.OpenApplicationArguments}\n{item.Arguments}" };
+        var row = new Forms.ToolStripMenuItem(MenuText($"{item.IconText} {LauncherLabel(item, 32)}"))
+        { ToolTipText = item.LaunchRecipeTooltip };
         row.Click += (_, _) => Dispatcher.Invoke(() =>
         {
             if (Recipe(item) != recipe) { ShowInfo("この登録の起動方法は変更されました。メニューを開き直してください。"); return; }
@@ -78,11 +75,11 @@ public partial class MainWindow
 
     private void RefreshTrayMenu()
     {
+        RefreshLauncherBar();
         if (_notifyIcon is null) return;
         if (_notifyIcon.ContextMenuStrip?.Visible == true) { _trayRefreshPending = true; return; }
         var menu = new Forms.ContextMenuStrip { ShowItemToolTips = true };
-        var favorites = _store.Items.Where(x => x.IsFavorite).OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var favorites = OrderedLauncherPins();
         if (favorites.Count == 0)
             menu.Items.Add(new Forms.ToolStripMenuItem("お気に入りを登録するとここから開けます") { Enabled = false });
         foreach (var item in favorites.Take(20)) menu.Items.Add(CreateLaunchMenuItem(item));
@@ -171,13 +168,13 @@ public partial class MainWindow
             try { _store.Save(); _historySavePending = false; ShowInfo("履歴を保存しました。起動要求は再送していません。"); }
             catch (Exception ex) { ShowInfo("保存できませんでした。\n" + ex.Message); }
         }).Enabled = _historySavePending;
-        AddTrayAction(manage.DropDownItems, "小型ランチャーバーを表示 / 非表示", () =>
+        AddTrayAction(manage.DropDownItems, "固定バーを表示 / 非表示", () => SetLauncherBarVisible(_launcherBar?.IsVisible != true));
+        var topmost = AddTrayAction(manage.DropDownItems, "固定バーを最前面に表示（今回のみ）", () =>
         {
-            if (!EnsureEditingAllowed()) return;
-            _store.Settings.ShowLauncherBar = _launcherBar?.IsVisible != true;
-            _store.Save();
-            if (_store.Settings.ShowLauncherBar) ShowLauncherBar(); else _launcherBar?.Hide();
+            ShowLauncherBar();
+            _launcherBar!.Topmost = !_launcherBar.Topmost;
         });
+        topmost.Checked = _launcherBar?.Topmost == true;
         AddTrayAction(manage.DropDownItems, "更新を確認", () => _ = CheckUpdateAsync(false));
         menu.Items.Add(manage);
         AddTrayAction(menu.Items, "終了", () => { _isExitRequested = true; System.Windows.Application.Current.Shutdown(); });
@@ -381,18 +378,4 @@ public partial class MainWindow
         form.Controls.Add(preview); form.Controls.Add(buttons); form.ShowDialog();
     }
 
-    private void ShowLauncherBar()
-    {
-        if (_launcherBar is null)
-        {
-            var button = new System.Windows.Controls.Button { Content = "DHub ▾", Padding = new Thickness(16, 8, 16, 8),
-                ToolTip = "クリックでお気に入り。タイトル部分をドラッグして移動。閉じるとトレイに戻ります。" };
-            _launcherBar = new Window { Title = "DHub", Width = 130, Height = 72, Content = button,
-                ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, ShowInTaskbar = false };
-            button.Click += (_, _) => ShowLauncherPopup();
-            _launcherBar.Closing += (_, e) => { if (!_isExitRequested) { e.Cancel = true; _launcherBar.Hide(); } };
-        }
-        _launcherBar.Show(); _launcherBar.Activate();
-    }
 }
-

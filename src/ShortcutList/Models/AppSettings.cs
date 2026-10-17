@@ -6,6 +6,11 @@ public class AppSettings
 
     public bool ShowLauncherBar { get; set; } = false;
 
+    // Desktop coordinates from GetWindowRect, kept in the same coordinate space as Screen.WorkingArea.
+    // Null means first use: place the bar above the primary taskbar without moving the OS taskbar.
+    public int? LauncherBarLeft { get; set; }
+    public int? LauncherBarTop { get; set; }
+
     public bool StartMinimizedToTray { get; set; } = false;
 
     public bool ShowNameColumn { get; set; } = true;

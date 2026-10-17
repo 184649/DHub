@@ -299,6 +299,7 @@ function Assert-JsonShape([Text.Json.JsonElement]$Element, [hashtable]$Fields, [
             'Boolean' { $kind -in @([Text.Json.JsonValueKind]::True, [Text.Json.JsonValueKind]::False) }
             'Object' { $kind -eq [Text.Json.JsonValueKind]::Object }
             'Array' { $kind -eq [Text.Json.JsonValueKind]::Array }
+            'NullableInteger' { $n = 0; $kind -eq [Text.Json.JsonValueKind]::Null -or ($kind -eq [Text.Json.JsonValueKind]::Number -and $property.Value.TryGetInt32([ref]$n)) }
             'Integer' { $n = 0; $kind -eq [Text.Json.JsonValueKind]::Number -and $property.Value.TryGetInt32([ref]$n) }
             'DateTime' { $d = [datetime]::MinValue; $kind -eq [Text.Json.JsonValueKind]::String -and $property.Value.TryGetDateTime([ref]$d) }
             'NullableDateTime' { $d = [datetime]::MinValue; $kind -eq [Text.Json.JsonValueKind]::Null -or ($kind -eq [Text.Json.JsonValueKind]::String -and $property.Value.TryGetDateTime([ref]$d)) }
@@ -339,7 +340,7 @@ function ConvertTo-CanonicalProfileJson([Text.Json.JsonElement]$Element) {
 }
 
 function Assert-DHubSettings([Text.Json.JsonElement]$Settings) {
-    $fields = @{ SchemaVersion = 'Integer'; UpdateVersionUrl = 'String'; AutoBackupKeepCount = 'Integer'; OperationLogKeepCount = 'Integer' }
+    $fields = @{ SchemaVersion = 'Integer'; UpdateVersionUrl = 'String'; AutoBackupKeepCount = 'Integer'; OperationLogKeepCount = 'Integer'; LauncherBarLeft = 'NullableInteger'; LauncherBarTop = 'NullableInteger' }
     foreach ($name in @('ShowLauncherBar','StartMinimizedToTray','ShowNameColumn','ShowPathColumn','ShowArgumentsColumn',
         'ShowOpenApplicationColumn','ShowGroupColumn','ShowTagsColumn','ShowLaunchCountColumn','ShowLastLaunchColumn',
         'ShowCreatedAtColumn','ShowUpdatedAtColumn','ShowStatusColumn','CheckUpdateOnStartup','EnableGlobalHotkeys',
