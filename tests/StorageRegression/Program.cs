@@ -1,0 +1,114 @@
+using System.Text.Json;
+using ShortcutList.Models;
+using ShortcutList.Services;
+
+var tests = new (string Name, Action Body)[]
+{
+    ("first load has no writes", () => WithStore((s, root) => { s.Load(); Equal(0, s.Items.Count); False(s.IsReadOnly); False(File.Exists(s.StoragePath)); })),
+    ("combined save reload uses production models", () => WithStore((s, root) => { s.Load(); s.Add(Item("a")); var reloaded = new ShortcutStore(root); reloaded.Load(); False(reloaded.IsReadOnly); Equal("a", reloaded.Items.Single().Id); })),
+    ("split disabled is honored before reading corrupt split", () => WithData(false, (s, d) => { File.WriteAllText(s.SettingsDataPath, "broken"); File.WriteAllText(s.ShortcutsDataPath, "broken"); s.Load(); False(s.IsReadOnly); Equal("a", s.Items.Single().Id); False(s.Settings.EnableSeparatedDataFiles); })),
+    ("split disabled cannot be re-enabled by stale settings", () => WithData(false, (s, d) => { WriteSplit(s, NewData("stale")); s.Load(); False(s.IsReadOnly); Equal("a", s.Items.Single().Id); False(s.Settings.EnableSeparatedDataFiles); })),
+    ("corrupt split preserves combined items", () => WithData(true, (s, d) => { WriteSplit(s, d); File.WriteAllText(s.ShortcutsDataPath, "["); s.Load(); True(s.IsReadOnly); Equal("a", s.Items.Single().Id); True(s.CanUseCombinedData); False(s.CanUseSeparatedData); })),
+    ("late corrupt split commits no partial lists", () => WithData(true, (s, d) => { WriteSplit(s, NewData("stale")); File.WriteAllText(s.LogsDataPath, "broken"); s.Load(); True(s.IsReadOnly); Equal("a", s.Items.Single().Id); })),
+    ("partial split set is surfaced", () => WithData(true, (s, d) => { File.WriteAllText(s.ShortcutsDataPath, "[]"); s.Load(); True(s.IsReadOnly); Equal(1, s.Items.Count); Contains(s.LastLoadMessage, "不足"); })),
+    ("null split is rejected without clearing items", () => WithData(true, (s, d) => { WriteSplit(s, d); File.WriteAllText(s.ShortcutsDataPath, "null"); s.Load(); True(s.IsReadOnly); Equal(1, s.Items.Count); })),
+    ("matching split loads", () => WithData(true, (s, d) => { WriteSplit(s, d); s.Load(); False(s.IsReadOnly); Equal(1, s.Items.Count); })),
+    ("stale split cannot roll back combined", () => WithData(true, (s, d) => { WriteSplit(s, NewData("stale")); s.Load(); True(s.IsReadOnly); True(s.CanUseSeparatedData); Equal("a", s.Items.Single().Id); True(s.Settings.EnableSeparatedDataFiles); })),
+    ("missing main recovers bak without writes", () => WithStore((s, root) => { Write(s.StoragePath + ".bak", NewData("backup", false)); s.Load(); True(s.WasRecoveredOnLoad); Equal("backup", s.Items.Single().Id); False(File.Exists(s.StoragePath)); })),
+    ("corrupt main recovers bak without writes", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "broken"); Write(s.StoragePath + ".bak", NewData("backup", false)); s.Load(); True(s.WasRecoveredOnLoad); Equal("backup", s.Items.Single().Id); Equal("broken", File.ReadAllText(s.StoragePath)); })),
+    ("backup folder recovers missing main", () => WithStore((s, root) => { Directory.CreateDirectory(s.BackupFolder); Write(Path.Combine(s.BackupFolder, "shortcuts_manual_test.json"), NewData("manual", false)); s.Load(); True(s.WasRecoveredOnLoad); Equal("manual", s.Items.Single().Id); })),
+    ("bad newest backup falls back to valid older backup", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath + ".bak", "bad"); Directory.CreateDirectory(s.BackupFolder); Write(Path.Combine(s.BackupFolder, "shortcuts_auto_old.json"), NewData("older", false)); s.Load(); Equal("older", s.Items.Single().Id); })),
+    ("unrecoverable main never blank saves", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "broken"); s.Load(); True(s.IsReadOnly); Throws<InvalidOperationException>(s.Save); Equal("broken", File.ReadAllText(s.StoragePath)); False(Directory.Exists(s.BackupFolder)); })),
+    ("null combined is not new empty data", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "null"); s.Load(); True(s.IsReadOnly); Equal("null", File.ReadAllText(s.StoragePath)); })),
+    ("empty object is not new empty data", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "{}"); s.Load(); True(s.IsReadOnly); })),
+    ("orphan temp is not promoted or blank overwritten", () => WithStore((s, root) => { Write(s.StoragePath + ".pending.tmp", NewData("pending")); s.Load(); True(s.IsReadOnly); Equal(0, s.Items.Count); False(File.Exists(s.StoragePath)); })),
+    ("valid complete split-only store loads without migration", () => WithStore((s, root) => { WriteSplit(s, NewData("split")); s.Load(); False(s.IsReadOnly); Equal("split", s.Items.Single().Id); False(File.Exists(s.StoragePath)); })),
+    ("disabled split-only settings refuse accidental migration", () => WithStore((s, root) => { WriteSplit(s, NewData("split", false)); s.Load(); True(s.IsReadOnly); False(File.Exists(s.StoragePath)); })),
+    ("failed reload retains prior live collection", () => WithData(false, (s, d) => { s.Load(); File.WriteAllText(s.StoragePath, "bad"); s.Load(); True(s.IsReadOnly); Equal("a", s.Items.Single().Id); })),
+    ("read-only mutators precheck before mutation", () => WithData(true, (s, d) => { WriteSplit(s, NewData("stale")); s.Load(); Throws<InvalidOperationException>(() => s.Add(Item("b"))); Throws<InvalidOperationException>(() => s.Remove(s.Items[0])); Throws<InvalidOperationException>(s.ClearLogs); Throws<InvalidOperationException>(() => s.AddWorkspace(new WorkspaceItem())); Throws<InvalidOperationException>(() => s.AddCommand(new CommandItem())); Equal("a", s.Items.Single().Id); Equal(0, s.Workspaces.Count); Equal(0, s.Commands.Count); })),
+    ("explicit combined choice preserves original split", () => WithData(true, (s, d) => { WriteSplit(s, NewData("stale")); var original = File.ReadAllText(s.ShortcutsDataPath); s.Load(); s.ResolveSeparatedDataConflict(false); False(s.IsReadOnly); Equal("a", s.Items.Single().Id); True(Directory.GetFiles(Path.Combine(s.StorageFolder, "PreservedSnapshots"), "shortcuts.data.json", SearchOption.AllDirectories).Any(p => File.ReadAllText(p) == original)); var again = new ShortcutStore(s.StorageFolder); again.Load(); False(again.IsReadOnly); Equal("a", again.Items.Single().Id); })),
+    ("explicit separated choice preserves original combined", () => WithData(true, (s, d) => { WriteSplit(s, NewData("split")); var original = File.ReadAllText(s.StoragePath); s.Load(); s.ResolveSeparatedDataConflict(true); False(s.IsReadOnly); Equal("split", s.Items.Single().Id); True(Directory.GetFiles(Path.Combine(s.StorageFolder, "PreservedSnapshots"), "shortcuts.json", SearchOption.AllDirectories).Any(p => File.ReadAllText(p) == original)); })),
+    ("invalid split cannot be selected", () => WithData(true, (s, d) => { WriteSplit(s, d); File.WriteAllText(s.LogsDataPath, "bad"); s.Load(); Throws<InvalidOperationException>(() => s.ResolveSeparatedDataConflict(true)); True(s.IsReadOnly); Equal("a", s.Items.Single().Id); })),
+    ("conflict choice detects edits after preview", () => WithData(true, (s, d) => { WriteSplit(s, NewData("split")); s.Load(); File.WriteAllText(s.ShortcutsDataPath, "[]"); Throws<InvalidOperationException>(() => s.ResolveSeparatedDataConflict(false)); True(s.IsReadOnly); Equal("[]", File.ReadAllText(s.ShortcutsDataPath)); })),
+    ("external main edit blocks stale save", () => WithData(false, (s, d) => { s.Load(); Write(s.StoragePath, NewData("external", false)); Throws<InvalidOperationException>(s.Save); True(s.IsReadOnly); Equal("external", JsonSerializer.Deserialize<AppData>(File.ReadAllText(s.StoragePath))!.Items[0].Id); })),
+    ("corrupt main recovery save preserves valid bak", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "broken"); Write(s.StoragePath + ".bak", NewData("backup", false)); var backup = File.ReadAllText(s.StoragePath + ".bak"); s.Load(); s.Save(); Equal(backup, File.ReadAllText(s.StoragePath + ".bak")); False(Directory.Exists(s.BackupFolder)); True(Directory.GetFiles(Path.Combine(root, "PreservedSnapshots"), "shortcuts.json", SearchOption.AllDirectories).Any(p => File.ReadAllText(p) == "broken")); })),
+    ("automatic retention preserves manual backups", () => WithData(false, (s, d) => { s.Load(); s.Settings.AutoBackupKeepCount = 1; var manual = s.CreateManualBackup(); s.Save(); s.Save(); s.Save(); True(File.Exists(manual)); Equal(1, Directory.GetFiles(s.BackupFolder, "shortcuts_auto_*.json").Length); })),
+    ("manual backups in same second are unique", () => WithData(false, (s, d) => { s.Load(); var a = s.CreateManualBackup(); var b = s.CreateManualBackup(); False(a == b); True(File.Exists(a)); True(File.Exists(b)); })),
+    ("atomic replace retains prior valid main", () => WithData(false, (s, d) => { s.Load(); s.Settings.EnableAutoBackup = false; s.Items[0].Name = "changed"; s.Save(); Equal("a", JsonSerializer.Deserialize<AppData>(File.ReadAllText(s.StoragePath + ".bak"))!.Items[0].Name); Equal("changed", JsonSerializer.Deserialize<AppData>(File.ReadAllText(s.StoragePath))!.Items[0].Name); Equal(0, Directory.GetFiles(s.StorageFolder, "*.tmp").Length); })),
+    ("legacy unsafe-save setting still writes atomically", () => WithData(false, (s, d) => { s.Load(); s.Settings.EnableSafeSave = false; s.Save(); True(File.Exists(s.StoragePath + ".bak")); })),
+    ("atomic temporary validation failure preserves main", () => WithStore((s, root) => { var path = Path.Combine(root, "sample.json"); File.WriteAllText(path, "original"); Throws<InvalidDataException>(() => StorageFile.AtomicWrite<object>(path, "new", _ => throw new InvalidDataException("fail"), false)); Equal("original", File.ReadAllText(path)); Equal(1, Directory.GetFiles(root, "sample.json.*.tmp").Length); })),
+    ("main directory path is an error not first install", () => WithStore((s, root) => { Directory.CreateDirectory(s.StoragePath); s.Load(); True(s.IsReadOnly); })),
+    ("duplicate item ids fail without deleting source", () => WithStore((s, root) => { var data = NewData("duplicate", false); data.Items.Add(Item("DUPLICATE", "https://example.test/other")); Write(s.StoragePath, data); var raw = File.ReadAllText(s.StoragePath); s.Load(); True(s.IsReadOnly); Equal(raw, File.ReadAllText(s.StoragePath)); })),
+    ("dangling workspace references fail without source rewrite", () => WithStore((s, root) => { var data = NewData("a", false); data.Workspaces.Add(new WorkspaceItem { ShortcutIds = new() { "missing" } }); Write(s.StoragePath, data); s.Load(); True(s.IsReadOnly); Contains(s.LastLoadMessage, "ID"); })),
+    ("duplicate workspace ids rejected", () => WithStore((s, root) => { var data = NewData("a", false); data.Workspaces = new() { new WorkspaceItem { Id = "same" }, new WorkspaceItem { Id = "SAME" } }; Write(s.StoragePath, data); s.Load(); True(s.IsReadOnly); })),
+    ("duplicate command ids rejected", () => WithStore((s, root) => { var data = NewData("a", false); data.Commands = new() { new CommandItem { Id = "same" }, new CommandItem { Id = "SAME" } }; Write(s.StoragePath, data); s.Load(); True(s.IsReadOnly); })),
+    ("future schema rejected without overwrite", () => WithStore((s, root) => { var data = NewData("a", false); data.SchemaVersion = 100; Write(s.StoragePath, data); s.Load(); True(s.IsReadOnly); })),
+    ("null item rejected", () => WithStore((s, root) => { var data = NewData("a", false); data.Items.Add(null!); Write(s.StoragePath, data); s.Load(); True(s.IsReadOnly); })),
+    ("duplicate Add is rejected before mutation", () => WithData(false, (s, d) => { s.Load(); Throws<InvalidDataException>(() => s.Add(Item("A"))); Equal(1, s.Items.Count); })),
+    ("invalid import preserves collection and main", () => WithData(false, (s, d) => { s.Load(); var input = Path.Combine(s.StorageFolder, "invalid-import.json"); File.WriteAllText(input, "{}"); var raw = File.ReadAllText(s.StoragePath); Throws<InvalidDataException>(() => s.ImportShortcutsFromFile(input)); Equal("a", s.Items.Single().Id); Equal(raw, File.ReadAllText(s.StoragePath)); })),
+    ("URL path case and terminal slash remain distinct", () => WithStore((s, root) => { s.Load(); s.Settings.EnableSeparatedDataFiles = false; s.Items.Add(Item("a", "https://example.test/Path")); s.Items.Add(Item("b", "https://example.test/path")); s.Items.Add(Item("c", "https://example.test/Path/")); Equal(0, s.RemoveDuplicateExtras()); Equal(3, s.Items.Count); })),
+    ("different launch arguments remain distinct", () => WithStore((s, root) => { s.Load(); var a = Item("a", "tool.exe"); a.Arguments = "--one"; var b = Item("b", "tool.exe"); b.Arguments = "--two"; s.Items.Add(a); s.Items.Add(b); Equal(0, s.RemoveDuplicateExtras()); False(s.ContainsEquivalent(new ShortcutItem { TargetPath = "tool.exe", Arguments = "--three" })); })),
+    ("different opener and opener args remain distinct", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b"); b.OpenApplicationPath = "other.exe"; var c = Item("c"); c.OpenApplicationArguments = "--private"; s.Items.Add(a); s.Items.Add(b); s.Items.Add(c); Equal(0, s.RemoveDuplicateExtras()); })),
+    ("different user metadata remains distinct", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b"); b.Memo = "retain me"; s.Items.Add(a); s.Items.Add(b); Equal(0, s.RemoveDuplicateExtras()); })),
+    ("exact recipe duplicate remaps workspace reference", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b"); b.Name = a.Name; b.LaunchCount = 7; s.Items.Add(a); s.Items.Add(b); s.Workspaces.Add(new WorkspaceItem { ShortcutIds = new() { "b" } }); Equal(1, s.RemoveDuplicateExtras()); Equal("a", s.Workspaces.Single().ShortcutIds.Single()); Equal(7, s.Items.Single().LaunchCount); Equal(1, s.GetWorkspaceItems(s.Workspaces[0]).Count); })),
+    ("bookmark sources round trip with hidden paths", () => WithData(false, (s, d) => { s.Load(); s.BookmarkSources.Add(new BookmarkSource { Id = "source", Name = "Folder", FolderPath = "/bookmarks", HiddenPaths = new() { "/bookmarks/hidden.url" } }); s.Save(); var other = new ShortcutStore(s.StorageFolder); other.Load(); Equal("/bookmarks/hidden.url", other.BookmarkSources.Single().HiddenPaths.Single()); })),
+    ("split reconciliation retains combined bookmark sources", () => WithData(true, (s, d) => { d.BookmarkSources.Add(new BookmarkSource { Id = "source", FolderPath = "/bookmarks" }); Write(s.StoragePath, d); WriteSplit(s, NewData("split")); s.Load(); s.ResolveSeparatedDataConflict(true); Equal("source", s.BookmarkSources.Single().Id); })),
+    ("backup restore allowed from unrecoverable read-only", () => WithStore((s, root) => { File.WriteAllText(s.StoragePath, "broken"); s.Load(); var restore = Path.Combine(root, "user-backup.json"); Write(restore, NewData("restored", false)); s.RestoreFromBackup(restore); False(s.IsReadOnly); Equal("restored", s.Items.Single().Id); })),
+    ("save before load cannot overwrite an existing store", () => WithData(false, (s, d) => { var raw = File.ReadAllText(s.StoragePath); Throws<InvalidOperationException>(s.Save); Equal(raw, File.ReadAllText(s.StoragePath)); })),
+    ("enable split requires a choice before overwriting historical files", () => WithData(false, (s, d) => { WriteSplit(s, NewData("historical")); s.Load(); s.Settings.EnableSeparatedDataFiles = true; var raw = File.ReadAllText(s.ShortcutsDataPath); Throws<InvalidOperationException>(s.Save); True(s.IsReadOnly); Equal(raw, File.ReadAllText(s.ShortcutsDataPath)); s.ResolveSeparatedDataConflict(false); False(s.IsReadOnly); Equal("a", s.Items.Single().Id); })),
+    ("enable split with no historical files succeeds", () => WithData(false, (s, d) => { s.Load(); s.Settings.EnableSeparatedDataFiles = true; s.Save(); True(File.Exists(s.SettingsDataPath)); var other = new ShortcutStore(s.StorageFolder); other.Load(); False(other.IsReadOnly); })),
+    ("explicit split choice does not disable split mode", () => WithData(true, (s, d) => { WriteSplit(s, NewData("split", false)); s.Load(); True(s.IsReadOnly); s.ResolveSeparatedDataConflict(true); True(s.Settings.EnableSeparatedDataFiles); Equal("split", s.Items.Single().Id); })),
+    ("external split edit blocks overwrite", () => WithData(true, (s, d) => { WriteSplit(s, d); s.Load(); File.WriteAllText(s.LogsDataPath, "[] "); Throws<InvalidOperationException>(s.Save); True(s.IsReadOnly); Equal("[] ", File.ReadAllText(s.LogsDataPath)); })),
+    ("replacement failure keeps evidence and blocks later saves", () => WithData(false, (s, d) => { s.Load(); s.Settings.EnableAutoBackup = false; var raw = File.ReadAllText(s.StoragePath); Directory.CreateDirectory(s.StoragePath + ".bak"); Throws<IOException>(s.Save); True(s.IsReadOnly); Equal(raw, File.ReadAllText(s.StoragePath)); True(Directory.GetFiles(s.StorageFolder, "shortcuts.json.*.tmp").Length > 0); Throws<InvalidOperationException>(s.Save); })),
+    ("deferred log does not write until explicit Save", () => WithData(false, (s, d) => { s.Load(); var raw = File.ReadAllText(s.StoragePath); s.AddLog("launch", "accepted", save: false); Equal(raw, File.ReadAllText(s.StoragePath)); Equal(1, s.Logs.Count); s.Save(); Equal(1, JsonSerializer.Deserialize<AppData>(File.ReadAllText(s.StoragePath))!.Logs.Count); })),
+    ("same title with distinct arguments survives dedup", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b"); b.Name = a.Name; b.Arguments = "--other"; s.Items.Add(a); s.Items.Add(b); Equal(0, s.RemoveDuplicateExtras()); False(s.ContainsEquivalent(b, b.Id)); })),
+    ("same title with URL path case or slash survives dedup", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b", "https://example.test/path"); var c = Item("c", "https://example.test/Path/"); b.Name = c.Name = a.Name; s.Items.Add(a); s.Items.Add(b); s.Items.Add(c); Equal(0, s.RemoveDuplicateExtras()); })),
+    ("shortcut removal repairs only workspace references", () => WithStore((s, root) => { s.Load(); var a = Item("a"); var b = Item("b"); s.Items.Add(a); s.Items.Add(b); s.Workspaces.Add(new WorkspaceItem { ShortcutIds = new() { "a", "b" } }); s.Remove(a); Equal("b", s.Items.Single().Id); Equal("b", s.Workspaces.Single().ShortcutIds.Single()); })),
+    ("duplicate bookmark source ids rejected", () => WithStore((s, root) => { var d = NewData("a", false); d.BookmarkSources.Add(new BookmarkSource { Id = "same", FolderPath = "/one" }); d.BookmarkSources.Add(new BookmarkSource { Id = "SAME", FolderPath = "/two" }); Write(s.StoragePath, d); s.Load(); True(s.IsReadOnly); })),
+    ("invalid backup restore preserves current live collection", () => WithData(false, (s, d) => { s.Load(); var p = Path.Combine(s.StorageFolder, "bad-backup.json"); File.WriteAllText(p, "null"); Throws<InvalidDataException>(() => s.RestoreFromBackup(p)); Equal("a", s.Items.Single().Id); False(Directory.Exists(Path.Combine(s.StorageFolder, "PreservedSnapshots"))); })),
+
+    ("same-count conflict preview shows actual recipe differences", () => WithData(true, (s, d) => { var split = NewData("a"); split.Items[0].TargetPath = "https://example.test/changed"; split.Items[0].Arguments = "--private"; split.Settings.ShowHomeOnStartup = false; WriteSplit(s, split); s.Load(); Contains(s.StorageConflictSummary, "https://example.test/changed"); Contains(s.StorageConflictSummary, "--private"); Contains(s.StorageConflictSummary, "ShowHomeOnStartup"); })),
+    ("conflict summary caps long difference lists", () => WithData(true, (s, d) => { var split = NewData("split"); for (var i = 0; i < 40; i++) split.Items.Add(Item("extra" + i)); WriteSplit(s, split); s.Load(); Contains(s.StorageConflictSummary, "ほか"); True(s.StorageConflictSummary.Split('・').Length <= 21); })),
+    ("preserved files have a verified hash manifest", () => WithData(true, (s, d) => { WriteSplit(s, NewData("split")); s.Load(); s.ResolveSeparatedDataConflict(false); var manifest = Directory.GetFiles(Path.Combine(s.StorageFolder, "PreservedSnapshots"), "preservation-manifest.json", SearchOption.AllDirectories).Single(); var hashes = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(manifest))!; foreach (var pair in hashes) Equal(pair.Value, StorageFile.Fingerprint(Path.Combine(Path.GetDirectoryName(manifest)!, pair.Key))); })),
+    ("Windows argv quoting empty argument", () => Equal("\"\"", ShortcutRunner.QuoteArgument(""))),
+    ("Windows argv quoting trailing slash", () => Equal("\"C:\\folder\\\\\"", ShortcutRunner.QuoteArgument("C:\\folder\\"))),
+    ("Windows argv quoting embedded quote", () => Equal("\"a\\\"b\"", ShortcutRunner.QuoteArgument("a\"b"))),
+
+};
+var failures = new List<string>();
+foreach (var (name, body) in tests)
+{
+    try { body(); Console.WriteLine($"PASS {name}"); }
+    catch (Exception ex) { failures.Add(name); Console.WriteLine($"FAIL {name}\n{ex}"); }
+}
+Console.WriteLine($"{tests.Length - failures.Count}/{tests.Length} tests passed");
+return failures.Count == 0 ? 0 : 1;
+
+static ShortcutItem Item(string id, string target = "https://example.test/Path") => new()
+{
+    Id = id, Name = id, TargetPath = target, ShortcutType = ShortcutType.Url,
+    CreatedAt = new DateTime(2026, 1, 1), UpdatedAt = new DateTime(2026, 1, 1)
+};
+static AppData NewData(string id, bool split = true) => new() { Items = new() { Item(id) }, Settings = new AppSettings { EnableSeparatedDataFiles = split } };
+static void WithStore(Action<ShortcutStore, string> test)
+{
+    var root = Path.Combine(Path.GetTempPath(), "DHub.StorageRegression", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try { test(new ShortcutStore(root), root); }
+    finally { Directory.Delete(root, recursive: true); }
+}
+static void WithData(bool split, Action<ShortcutStore, AppData> test) => WithStore((s, _) => { var data = NewData("a", split); Write(s.StoragePath, data); test(s, data); });
+static void Write<T>(string path, T value) => File.WriteAllText(path, JsonSerializer.Serialize(value));
+static void WriteSplit(ShortcutStore s, AppData d)
+{
+    Write(s.ShortcutsDataPath, d.Items); Write(s.WorkspacesDataPath, d.Workspaces); Write(s.CommandsDataPath, d.Commands); Write(s.LogsDataPath, d.Logs); Write(s.SettingsDataPath, d.Settings);
+}
+static void True(bool value) { if (!value) throw new Exception("Expected true"); }
+static void False(bool value) => True(!value);
+static void Equal<T>(T expected, T actual) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new Exception($"Expected {expected}; got {actual}"); }
+static void Contains(string text, string value) { if (!text.Contains(value, StringComparison.Ordinal)) throw new Exception($"Expected '{value}' in '{text}'"); }
+static void Throws<T>(Action action) where T : Exception
+{
+    try { action(); } catch (T) { return; }
+    throw new Exception($"Expected {typeof(T).Name}");
+}

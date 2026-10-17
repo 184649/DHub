@@ -181,6 +181,7 @@ public class ShortcutItem : INotifyPropertyChanged
     public DateTime? LastLaunchedAt { get => _lastLaunchedAt; set => SetField(ref _lastLaunchedAt, value); }
     public int SortOrder { get => _sortOrder; set => SetField(ref _sortOrder, value); }
 
+    [JsonIgnore]
     public string TypeText => ShortcutType switch
     {
         ShortcutType.Folder => "フォルダ",
@@ -189,6 +190,7 @@ public class ShortcutItem : INotifyPropertyChanged
         _ => "不明"
     };
 
+    [JsonIgnore]
     public string IconText => ShortcutType switch
     {
         ShortcutType.Folder => "📁",
@@ -200,14 +202,21 @@ public class ShortcutItem : INotifyPropertyChanged
     [JsonIgnore]
     public ImageSource? IconImageSource => FileIconService.GetIcon(this);
 
+    [JsonIgnore]
     public string FavoriteText => IsFavorite ? "★" : "☆";
+    [JsonIgnore]
     public string FavoriteActionText => IsFavorite ? "★ 解除" : "☆ 登録";
+    [JsonIgnore]
     public string FavoriteDisplay => IsFavorite ? "お気に入り" : "通常";
 
+    [JsonIgnore]
     public string GroupDisplay => string.IsNullOrWhiteSpace(GroupName) ? "未分類" : GroupName;
+    [JsonIgnore]
     public string TagsDisplay => string.IsNullOrWhiteSpace(Tags) ? "-" : Tags;
+    [JsonIgnore]
     public string MemoDisplay => string.IsNullOrWhiteSpace(Memo) ? "-" : Memo;
 
+    [JsonIgnore]
     public bool IsBroken => ShortcutType switch
     {
         ShortcutType.Folder => !System.IO.Directory.Exists(TargetPath),
@@ -215,10 +224,13 @@ public class ShortcutItem : INotifyPropertyChanged
         _ => false
     };
 
+    [JsonIgnore]
     public string StatusText => IsBroken ? "未検出" : "OK";
 
+    [JsonIgnore]
     public string LastLaunchedDisplay => LastLaunchedAt.HasValue ? LastLaunchedAt.Value.ToString("yyyy/MM/dd HH:mm") : "-";
 
+    [JsonIgnore]
     public string OpenApplicationDisplay
     {
         get
@@ -246,7 +258,8 @@ public class ShortcutItem : INotifyPropertyChanged
         }
     }
 
-    public string SearchText => $"{Name} {TargetPath} {Arguments} {OpenApplicationPath} {OpenApplicationArguments} {OpenApplicationDisplay} {FavoriteDisplay} {TypeText} {GroupDisplay} {TagsDisplay} {Memo} {StatusText}".ToLowerInvariant();
+    [JsonIgnore]
+    public string SearchText => $"{Name} {TargetPath} {Arguments} {OpenApplicationPath} {OpenApplicationArguments} {OpenApplicationDisplay} {FavoriteDisplay} {TypeText} {GroupDisplay} {TagsDisplay} {Memo}".ToLowerInvariant();
 
     public IReadOnlyList<string> GetTagList()
     {
@@ -311,3 +324,4 @@ public class ShortcutItem : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
+

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/ShortcutList/Services/ShortcutStore.cs" Link="Production/ShortcutStore.cs" />
+    <Compile Include="../../src/ShortcutList/Services/StorageFile.cs" Link="Production/StorageFile.cs" />
+    <Compile Include="../../src/ShortcutList/Services/StorageSnapshotDiff.cs" Link="Production/StorageSnapshotDiff.cs" />
+    <Compile Include="../../src/ShortcutList/Services/StorageIntegrity.cs" Link="Production/StorageIntegrity.cs" />
+    <Compile Include="../../src/ShortcutList/Services/ShortcutDetector.cs" Link="Production/ShortcutDetector.cs" />
+    <Compile Include="../../src/ShortcutList/Services/ShortcutRunner.cs" Link="Production/ShortcutRunner.cs" />
+    <Compile Include="../../src/ShortcutList/Models/*.cs" Link="Production/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,69 @@
+PASS first load has no writes
+PASS combined save reload uses production models
+PASS split disabled is honored before reading corrupt split
+PASS split disabled cannot be re-enabled by stale settings
+PASS corrupt split preserves combined items
+PASS late corrupt split commits no partial lists
+PASS partial split set is surfaced
+PASS null split is rejected without clearing items
+PASS matching split loads
+PASS stale split cannot roll back combined
+PASS missing main recovers bak without writes
+PASS corrupt main recovers bak without writes
+PASS backup folder recovers missing main
+PASS bad newest backup falls back to valid older backup
+PASS unrecoverable main never blank saves
+PASS null combined is not new empty data
+PASS empty object is not new empty data
+PASS orphan temp is not promoted or blank overwritten
+PASS valid complete split-only store loads without migration
+PASS disabled split-only settings refuse accidental migration
+PASS failed reload retains prior live collection
+PASS read-only mutators precheck before mutation
+PASS explicit combined choice preserves original split
+PASS explicit separated choice preserves original combined
+PASS invalid split cannot be selected
+PASS conflict choice detects edits after preview
+PASS external main edit blocks stale save
+PASS corrupt main recovery save preserves valid bak
+PASS automatic retention preserves manual backups
+PASS manual backups in same second are unique
+PASS atomic replace retains prior valid main
+PASS legacy unsafe-save setting still writes atomically
+PASS atomic temporary validation failure preserves main
+PASS main directory path is an error not first install
+PASS duplicate item ids fail without deleting source
+PASS dangling workspace references fail without source rewrite
+PASS duplicate workspace ids rejected
+PASS duplicate command ids rejected
+PASS future schema rejected without overwrite
+PASS null item rejected
+PASS duplicate Add is rejected before mutation
+PASS invalid import preserves collection and main
+PASS URL path case and terminal slash remain distinct
+PASS different launch arguments remain distinct
+PASS different opener and opener args remain distinct
+PASS different user metadata remains distinct
+PASS exact recipe duplicate remaps workspace reference
+PASS bookmark sources round trip with hidden paths
+PASS split reconciliation retains combined bookmark sources
+PASS backup restore allowed from unrecoverable read-only
+PASS save before load cannot overwrite an existing store
+PASS enable split requires a choice before overwriting historical files
+PASS enable split with no historical files succeeds
+PASS explicit split choice does not disable split mode
+PASS external split edit blocks overwrite
+PASS replacement failure keeps evidence and blocks later saves
+PASS deferred log does not write until explicit Save
+PASS same title with distinct arguments survives dedup
+PASS same title with URL path case or slash survives dedup
+PASS shortcut removal repairs only workspace references
+PASS duplicate bookmark source ids rejected
+PASS invalid backup restore preserves current live collection
+PASS same-count conflict preview shows actual recipe differences
+PASS conflict summary caps long difference lists
+PASS preserved files have a verified hash manifest
+PASS Windows argv quoting empty argument
+PASS Windows argv quoting trailing slash
+PASS Windows argv quoting embedded quote
+68/68 tests passed

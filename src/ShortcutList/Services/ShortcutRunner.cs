@@ -44,13 +44,22 @@ public static class ShortcutRunner
 
     public static string QuoteArgument(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        // Windows argv quoting doubles backslashes before a quote or closing delimiter.
+        var result = new System.Text.StringBuilder("\"");
+        var slashes = 0;
+        foreach (var character in value ?? string.Empty)
         {
-            return "\"\"";
+            if (character == '\\') { slashes++; continue; }
+            if (character == '"')
+            {
+                result.Append('\\', slashes * 2 + 1).Append('"');
+                slashes = 0;
+                continue;
+            }
+            result.Append('\\', slashes).Append(character);
+            slashes = 0;
         }
-
-        var escaped = value.Replace("\"", "\\\"");
-        return $"\"{escaped}\"";
+        return result.Append('\\', slashes * 2).Append('"').ToString();
     }
 
     public static void OpenFolder(string path)
@@ -153,3 +162,4 @@ public static class ShortcutRunner
         return string.Join(" ", parts);
     }
 }
+

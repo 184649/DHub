@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -34,7 +34,7 @@ public partial class MainWindow : Window
     private const string FavoriteFilter = "お気に入りのみ";
     private const string BrokenFilter = "未検出のみ";
 
-    private readonly ShortcutStore _store = new();
+    private readonly ShortcutStore _store;
     private readonly ObservableCollection<ShortcutItem> _visibleItems = new();
     private readonly UpdateService _updateService = new();
 
@@ -65,15 +65,16 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-    public MainWindow()
+    public MainWindow(string? storageFolder = null)
     {
+        _store = storageFolder is null ? new ShortcutStore() : new ShortcutStore(storageFolder);
         InitializeComponent();
 
         ShortcutListView.ItemsSource = _visibleItems;
 
         _store.Load();
         FileIconService.IsEnabled = _store.Settings.UseRealFileIcons;
-        if (_store.WasRecoveredOnLoad && _store.Settings.ShowRestoreMessageAfterRecovery)
+        if (!string.IsNullOrWhiteSpace(_store.LastLoadMessage))
         {
             Dispatcher.BeginInvoke(new Action(() => ShowInfo(_store.LastLoadMessage)));
         }
@@ -98,6 +99,19 @@ public partial class MainWindow : Window
                 ShowHomeDashboard();
             }
         }));
+    }
+
+    public void ShowInitialWindow()
+    {
+        _ = new WindowInteropHelper(this).EnsureHandle();
+        if (!_store.Settings.StartMinimizedToTray) Show();
+    }
+
+    private bool EnsureEditingAllowed()
+    {
+        if (!_store.IsReadOnly) return true;
+        ShowInfo("保存データを確認するまで編集を停止しています。管理メニューの「保存データの確認 / 復旧」から確認できます。");
+        return false;
     }
 
     private ShortcutItem? SelectedItem => ShortcutListView.SelectedItem as ShortcutItem;
@@ -157,6 +171,8 @@ public partial class MainWindow : Window
         _notifyIcon = null;
         _trayIcon?.Dispose();
         _trayIcon = null;
+        _bookmarkService.Dispose();
+        _launcherBar?.Close();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -738,6 +754,7 @@ public partial class MainWindow : Window
 
         item.Click += (_, _) =>
         {
+            if (!EnsureEditingAllowed()) return;
             setter(item.IsChecked);
             ApplyColumnVisibility();
             _store.Save();
@@ -793,6 +810,7 @@ public partial class MainWindow : Window
 
     private void OpenAddDialog()
     {
+        if (!EnsureEditingAllowed()) return;
         var dialog = new ShortcutEditWindow { Owner = this };
 
         if (dialog.ShowDialog() != true || dialog.ResultItem is null)
@@ -800,10 +818,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_store.ContainsTarget(dialog.ResultItem.TargetPath))
+        if (_store.ContainsEquivalent(dialog.ResultItem))
         {
             System.Windows.MessageBox.Show(
-                "同じパスまたはURLがすでに登録されています。",
+                "同じ起動先・引数・アプリの登録がすでにあります。",
                 "DHub",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
@@ -817,6 +835,7 @@ public partial class MainWindow : Window
 
     private void EditButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureEditingAllowed()) return;
         if (SelectedItem is null)
         {
             return;
@@ -829,10 +848,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_store.ContainsTarget(dialog.ResultItem.TargetPath, SelectedItem.Id))
+        if (_store.ContainsEquivalent(dialog.ResultItem, SelectedItem.Id))
         {
             System.Windows.MessageBox.Show(
-                "同じパスまたはURLがすでに登録されています。",
+                "同じ起動先・引数・アプリの登録がすでにあります。",
                 "DHub",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
@@ -849,6 +868,7 @@ public partial class MainWindow : Window
         SelectedItem.GroupName = dialog.ResultItem.GroupName;
         SelectedItem.Tags = dialog.ResultItem.Tags;
         SelectedItem.TagColor = dialog.ResultItem.TagColor;
+        SelectedItem.Memo = dialog.ResultItem.Memo;
         SelectedItem.TouchUpdated();
 
         _store.Save();
@@ -871,6 +891,7 @@ public partial class MainWindow : Window
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureEditingAllowed()) return;
         if (SelectedItem is null)
         {
             return;
@@ -1105,29 +1126,58 @@ public partial class MainWindow : Window
         LaunchItem(SelectedItem);
     }
 
-    private void LaunchItem(ShortcutItem item)
+    private bool LaunchItem(ShortcutItem item)
     {
-        try
+        if (!_store.Items.Any(x => ReferenceEquals(x, item)))
         {
-            ShortcutRunner.Run(item);
+            ShowInfo("この登録は変更または削除されました。メニューを開き直してください。");
+            return false;
+        }
+        var result = LaunchCoordinator.Execute(() => ShortcutRunner.Run(item), () =>
+        {
             item.TouchLaunched();
-            _store.Save();
-            _store.AddLog("Launch", "ショートカットを起動", item.Name + " / " + item.TargetPath);
-            ApplyFilter();
-        }
-        catch (Exception ex)
+            SaveLaunchHistory("Launch", "ショートカットへ起動要求を送信", item.Name + " / " + item.TargetPath);
+        });
+        if (!result.Requested)
         {
-            _store.AddLog("Launch", "ショートカット起動失敗", item.Name + " / " + ex.Message, "Error");
-            System.Windows.MessageBox.Show(
-                $"ショートカットを開けませんでした。\n\n対象: {item.TargetPath}\n開くアプリ: {item.OpenApplicationDisplay}\n\n{ex.Message}",
-                "DHub",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Warning);
+            TryLog("Launch", "ショートカット起動要求失敗", item.Name + " / " + result.RequestError!.Message, "Error");
+            ShowInfo($"ショートカットの起動要求に失敗しました。\n対象: {item.TargetPath}\n{result.RequestError.Message}");
+            return false;
         }
+        ReportHistoryOutcome(result.HistoryError);
+        ApplyFilter();
+        return true;
+    }
+
+    private void TryLog(string category, string message, string detail, string level = "Info")
+    {
+        try { _store.AddLog(category, message, detail, level); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException)
+        { System.Diagnostics.Trace.WriteLine(ex); }
+    }
+
+    private void SaveLaunchHistory(string category, string message, string detail)
+    {
+        _store.AddLog(category, message, detail, save: false);
+        _store.Save();
+    }
+
+    private void ReportHistoryOutcome(Exception? error)
+    {
+        _historySavePending = error is not null;
+        if (error is not null)
+            ShowInfo("起動要求は送信済みですが、履歴を保存できませんでした。対象の再起動は不要です。\n管理メニューの「未保存の履歴を再保存」から保存だけを再試行できます。\n" + error.Message);
+    }
+
+    private void PersistLaunchHistory(string category, string message, string detail)
+    {
+        try { SaveLaunchHistory(category, message, detail); ReportHistoryOutcome(null); }
+        catch (Exception ex) { ReportHistoryOutcome(ex); }
     }
 
     private void ToggleFavorite(ShortcutItem item)
     {
+        if (!EnsureEditingAllowed()) return;
         item.IsFavorite = !item.IsFavorite;
         item.TouchUpdated();
         _store.Save();
@@ -1147,6 +1197,7 @@ public partial class MainWindow : Window
 
     private void ResetOpenApplication(ShortcutItem item)
     {
+        if (!EnsureEditingAllowed()) return;
         item.OpenApplicationPath = ShortcutRunner.GetDefaultOpenApplicationPath(item.ShortcutType);
         item.OpenApplicationArguments = string.Empty;
         item.TouchUpdated();
@@ -1156,6 +1207,7 @@ public partial class MainWindow : Window
 
     private void SelectOpenApplication(ShortcutItem item)
     {
+        if (!EnsureEditingAllowed()) return;
         var dialog = new OpenApplicationPickerWindow(
             item.ShortcutType,
             item.OpenApplicationPath,
@@ -1232,6 +1284,7 @@ public partial class MainWindow : Window
 
     private void EditShortcutMemo(ShortcutItem item)
     {
+        if (!EnsureEditingAllowed()) return;
         if (EditMemo($"メモ - {item.Name}", item.Memo, out var memo))
         {
             item.Memo = memo;
@@ -1400,6 +1453,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox)
+            return;
+        if (!ShortcutListView.IsKeyboardFocusWithin) return;
+
         if (e.Key == Key.Delete)
         {
             DeleteButton_Click(this, new RoutedEventArgs());
@@ -1469,222 +1526,6 @@ public partial class MainWindow : Window
         Keyboard.Focus(SearchTextBox);
     }
 
-    private void InitializeTrayIcon()
-    {
-        _trayIcon = LoadApplicationIcon();
-
-        _notifyIcon = new Forms.NotifyIcon
-        {
-            Icon = _trayIcon,
-            Text = "DHub",
-            Visible = true
-        };
-
-        _notifyIcon.DoubleClick += (_, _) =>
-        {
-            Dispatcher.Invoke(ShowMainWindowFromTray);
-        };
-
-        RefreshTrayMenu();
-    }
-
-    private void RefreshTrayMenu()
-    {
-        if (_notifyIcon is null) return;
-
-        var menu = new Forms.ContextMenuStrip();
-
-        var favorites = _store.Items
-            .Where(x => x.IsFavorite)
-            .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        var favoriteMenu = new Forms.ToolStripMenuItem("お気に入り");
-        if (favorites.Count == 0)
-        {
-            favoriteMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("登録なし") { Enabled = false });
-        }
-        else
-        {
-            foreach (var item in favorites.Take(30))
-            {
-                AddTrayLaunchItem(favoriteMenu, item);
-            }
-        }
-        menu.Items.Add(favoriteMenu);
-
-        var recentItems = _store.Items
-            .Where(x => x.LastLaunchedAt.HasValue)
-            .OrderByDescending(x => x.LastLaunchedAt ?? DateTime.MinValue)
-            .ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Take(15)
-            .ToList();
-
-        var recentMenu = new Forms.ToolStripMenuItem("最近使った項目");
-        if (recentItems.Count == 0)
-        {
-            recentMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("履歴なし") { Enabled = false });
-        }
-        else
-        {
-            foreach (var item in recentItems)
-            {
-                AddTrayLaunchItem(recentMenu, item);
-            }
-        }
-        menu.Items.Add(recentMenu);
-
-        var homeItemRoot = new Forms.ToolStripMenuItem("ホーム");
-        homeItemRoot.Click += (_, _) => Dispatcher.Invoke(ShowHomeDashboard);
-        menu.Items.Add(homeItemRoot);
-
-        var commandPaletteRoot = new Forms.ToolStripMenuItem("統合検索 / コマンドパレット");
-        commandPaletteRoot.Click += (_, _) => Dispatcher.Invoke(ShowCommandPalette);
-        menu.Items.Add(commandPaletteRoot);
-
-        var workspaceRoot = new Forms.ToolStripMenuItem("ワークスペース");
-        if (_store.Workspaces.Count == 0)
-        {
-            workspaceRoot.DropDownItems.Add(new Forms.ToolStripMenuItem("登録なし") { Enabled = false });
-        }
-        else
-        {
-            foreach (var workspace in _store.Workspaces.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase))
-            {
-                var workspaceItem = new Forms.ToolStripMenuItem($"▶ {workspace.Name}");
-                workspaceItem.ToolTipText = workspace.Description;
-                workspaceItem.Click += (_, _) => Dispatcher.Invoke(() => LaunchWorkspace(workspace));
-                workspaceRoot.DropDownItems.Add(workspaceItem);
-            }
-        }
-        menu.Items.Add(workspaceRoot);
-
-        var commandRoot = new Forms.ToolStripMenuItem("コマンド");
-        if (_store.Commands.Count == 0)
-        {
-            commandRoot.DropDownItems.Add(new Forms.ToolStripMenuItem("登録なし") { Enabled = false });
-        }
-        else
-        {
-            foreach (var command in _store.Commands.OrderByDescending(x => x.IsFavorite).ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).Take(40))
-            {
-                var commandItem = new Forms.ToolStripMenuItem($"{command.FavoriteText} {command.Name}");
-                commandItem.ToolTipText = command.Command + " " + command.Arguments;
-                commandItem.Click += (_, _) => Dispatcher.Invoke(() => RunCommand(command));
-                commandRoot.DropDownItems.Add(commandItem);
-            }
-        }
-        menu.Items.Add(commandRoot);
-
-        var groupRoot = new Forms.ToolStripMenuItem("グループ");
-        var groupedItems = _store.Items
-            .GroupBy(x => x.GroupDisplay, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key == "未分類" ? "zzzzzz" : g.Key, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        if (groupedItems.Count == 0)
-        {
-            groupRoot.DropDownItems.Add(new Forms.ToolStripMenuItem("登録なし") { Enabled = false });
-        }
-        else
-        {
-            foreach (var group in groupedItems)
-            {
-                var groupMenu = new Forms.ToolStripMenuItem(group.Key);
-                foreach (var item in group.OrderByDescending(x => x.IsFavorite)
-                                          .ThenByDescending(x => x.LastLaunchedAt ?? DateTime.MinValue)
-                                          .ThenBy(x => x.SortOrder)
-                                          .ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
-                                          .Take(40))
-                {
-                    AddTrayLaunchItem(groupMenu, item);
-                }
-
-                groupRoot.DropDownItems.Add(groupMenu);
-            }
-        }
-        menu.Items.Add(groupRoot);
-
-        menu.Items.Add(new Forms.ToolStripSeparator());
-
-        var showItem = new Forms.ToolStripMenuItem("管理画面を開く");
-        showItem.Click += (_, _) => Dispatcher.Invoke(ShowMainWindowFromTray);
-        menu.Items.Add(showItem);
-
-        var spotlightItem = new Forms.ToolStripMenuItem("クイック検索");
-        spotlightItem.Click += (_, _) => Dispatcher.Invoke(ShowQuickSearch);
-        menu.Items.Add(spotlightItem);
-
-        var addItem = new Forms.ToolStripMenuItem("追加");
-        addItem.Click += (_, _) => Dispatcher.Invoke(OpenAddDialog);
-        menu.Items.Add(addItem);
-
-        menu.Items.Add(new Forms.ToolStripSeparator());
-
-        var exportShortcutsItem = new Forms.ToolStripMenuItem("ショートカットをエクスポート");
-        exportShortcutsItem.Click += (_, _) => Dispatcher.Invoke(ExportShortcuts);
-        menu.Items.Add(exportShortcutsItem);
-
-        var importShortcutsItem = new Forms.ToolStripMenuItem("ショートカットをインポート");
-        importShortcutsItem.Click += (_, _) => Dispatcher.Invoke(ImportShortcuts);
-        menu.Items.Add(importShortcutsItem);
-
-        var exportSettingsItem = new Forms.ToolStripMenuItem("設定をエクスポート");
-        exportSettingsItem.Click += (_, _) => Dispatcher.Invoke(ExportSettings);
-        menu.Items.Add(exportSettingsItem);
-
-        var importSettingsItem = new Forms.ToolStripMenuItem("設定をインポート");
-        importSettingsItem.Click += (_, _) => Dispatcher.Invoke(ImportSettings);
-        menu.Items.Add(importSettingsItem);
-
-        var logItem = new Forms.ToolStripMenuItem("操作ログ");
-        logItem.Click += (_, _) => Dispatcher.Invoke(ShowOperationLogWindow);
-        menu.Items.Add(logItem);
-
-        var commandManageItem = new Forms.ToolStripMenuItem("コマンド管理");
-        commandManageItem.Click += (_, _) => Dispatcher.Invoke(ShowCommandManager);
-        menu.Items.Add(commandManageItem);
-
-        var storageItem = new Forms.ToolStripMenuItem("データ保存場所を開く");
-        storageItem.Click += (_, _) => Dispatcher.Invoke(OpenStorageFolder);
-        menu.Items.Add(storageItem);
-
-        var startTrayItem = new Forms.ToolStripMenuItem("起動時はトレイのみ")
-        {
-            Checked = _store.Settings.StartMinimizedToTray,
-            CheckOnClick = true
-        };
-        startTrayItem.Click += (_, _) =>
-        {
-            _store.Settings.StartMinimizedToTray = startTrayItem.Checked;
-            _store.Save();
-        };
-        menu.Items.Add(startTrayItem);
-
-        menu.Items.Add(new Forms.ToolStripSeparator());
-
-        var exitItem = new Forms.ToolStripMenuItem("終了");
-        exitItem.Click += (_, _) => Dispatcher.Invoke(() =>
-        {
-            _isExitRequested = true;
-            WpfApplication.Current.Shutdown();
-        });
-        menu.Items.Add(exitItem);
-
-        var oldMenu = _notifyIcon.ContextMenuStrip;
-        _notifyIcon.ContextMenuStrip = menu;
-        oldMenu?.Dispose();
-    }
-
-    private void AddTrayLaunchItem(Forms.ToolStripMenuItem parent, ShortcutItem item)
-    {
-        var text = item.Name.Length > 36 ? item.Name[..36] + "..." : item.Name;
-        var menuItem = new Forms.ToolStripMenuItem($"{item.FavoriteText} {item.IconText} {text}");
-        menuItem.ToolTipText = item.TargetPath;
-        menuItem.Click += (_, _) => Dispatcher.Invoke(() => LaunchItem(item));
-        parent.DropDownItems.Add(menuItem);
-    }
     private void SidebarAllButton_Click(object sender, RoutedEventArgs e)
     {
         FilterComboBox.SelectedItem = AllFilter;
@@ -1892,28 +1733,30 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private readonly HashSet<string> _launchingWorkspaces = new(StringComparer.OrdinalIgnoreCase);
     private async void LaunchWorkspace(WorkspaceItem workspace)
     {
-        var items = _store.GetWorkspaceItems(workspace);
-        if (items.Count == 0)
+        if (!_launchingWorkspaces.Add(workspace.Id)) { ShowInfo("このワークスペースは起動処理中です。"); return; }
+        try
         {
-            ShowInfo("このワークスペースに有効なショートカットがありません。");
-            return;
-        }
-
-        foreach (var item in items)
-        {
-            LaunchItem(item);
-            if (workspace.DelaySeconds > 0)
+            var items = _store.GetWorkspaceItems(workspace).ToArray();
+            if (items.Length == 0) { ShowInfo("このワークスペースに有効なショートカットがありません。"); return; }
+            var launched = 0;
+            foreach (var item in items)
             {
-                await Task.Delay(TimeSpan.FromSeconds(workspace.DelaySeconds));
+                if (_isExitRequested) break;
+                if (LaunchItem(item)) launched++;
+                if (workspace.DelaySeconds > 0 && item != items[^1])
+                    await Task.Delay(TimeSpan.FromSeconds(workspace.DelaySeconds));
             }
+            if (launched > 0)
+            {
+                workspace.TouchLaunched();
+                PersistLaunchHistory("Workspace", "ワークスペース起動処理を終了", $"{workspace.Name}: {launched}/{items.Length} 件へ起動要求を送信");
+            }
+            RefreshTrayMenu();
         }
-
-        workspace.TouchLaunched();
-        _store.Save();
-        _store.AddLog("Workspace", "ワークスペースを起動", workspace.Name);
-        RefreshTrayMenu();
+        finally { _launchingWorkspaces.Remove(workspace.Id); }
     }
 
     private void ExportFullBackup()
@@ -1973,6 +1816,7 @@ public partial class MainWindow : Window
 
     private void ShowSettingsScreen()
     {
+        if (!EnsureEditingAllowed()) return;
         using var form = new Forms.Form
         {
             Text = "DHub 設定",
@@ -2172,6 +2016,7 @@ public partial class MainWindow : Window
 
     private void ShowBulkEditDialog()
     {
+        if (!EnsureEditingAllowed()) return;
         var selected = GetSelectedItems().ToList();
         if (selected.Count == 0)
         {
@@ -2763,7 +2608,7 @@ public partial class MainWindow : Window
                 filtered = filtered.Where(x => words.All(w => (x.SearchText + " " + x.Title + " " + x.Subtitle).ToLowerInvariant().Contains(w)));
             }
 
-            foreach (var result in filtered.OrderBy(x => x.Kind).ThenBy(x => x.Title).Take(200))
+            foreach (var result in filtered.OrderBy(x => x.Kind).ThenBy(x => x.Title))
             {
                 list.Items.Add(result);
             }
@@ -2865,6 +2710,7 @@ public partial class MainWindow : Window
 
     private bool ShowCommandEditDialog(CommandItem command, bool isNew)
     {
+        if (!EnsureEditingAllowed()) return false;
         using var form = new Forms.Form
         {
             Text = isNew ? "コマンド追加" : "コマンド編集",
@@ -2951,24 +2797,21 @@ public partial class MainWindow : Window
 
     private void RunCommand(CommandItem command)
     {
-        try
+        if (!_store.Commands.Any(x => ReferenceEquals(x, command))) { ShowInfo("このコマンドは変更されました。"); return; }
+        if (command.ConfirmBeforeRun && AskYesNo($"コマンドを実行しますか？\n\n{command.Name}\n{command.Command} {command.Arguments}") != true) return;
+        var result = LaunchCoordinator.Execute(() => ShortcutRunner.RunCommand(command), () =>
         {
-            if (command.ConfirmBeforeRun && AskYesNo($"コマンドを実行しますか？\n\n{command.Name}\n{command.Command} {command.Arguments}") != true)
-            {
-                return;
-            }
-
-            ShortcutRunner.RunCommand(command);
             command.TouchRun();
-            _store.SaveChanges();
-            _store.AddLog("Command", "コマンドを実行", command.Name + " / " + command.Command);
-            RefreshTrayMenu();
-        }
-        catch (Exception ex)
+            SaveLaunchHistory("Command", "コマンドへ起動要求を送信", command.Name + " / " + command.Command);
+        });
+        if (!result.Requested)
         {
-            _store.AddLog("Command", "コマンド実行失敗", command.Name + " / " + ex.Message, "Error");
-            System.Windows.MessageBox.Show("コマンドを実行できませんでした。\n" + ex.Message, "DHub", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            TryLog("Command", "コマンド起動要求失敗", command.Name + " / " + result.RequestError!.Message, "Error");
+            ShowInfo("コマンドの起動要求に失敗しました。\n" + result.RequestError.Message);
+            return;
         }
+        ReportHistoryOutcome(result.HistoryError);
+        RefreshTrayMenu();
     }
 
     private void ShowOperationLogWindow()
@@ -3064,6 +2907,14 @@ public partial class MainWindow : Window
 
     private async Task CheckUpdateAsync(bool silent)
     {
+        if (System.Reflection.Assembly.GetExecutingAssembly()
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .Any(a => a.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!silent) ShowInfo("検証版では自動更新を停止しています。このブランチからビルドした内容を引き続き確認できます。正式版への切替は別フォルダーで行ってください。");
+            return;
+        }
         try
         {
             var latest = await _updateService.CheckAsync(_store.Settings.UpdateVersionUrl);
@@ -3085,7 +2936,11 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (!silent)
+            if (silent)
+            {
+                _notifyIcon?.ShowBalloonTip(6000, "DHub の更新があります", "管理メニューの「更新を確認」から内容を確認できます。", Forms.ToolTipIcon.Info);
+                return;
+            }
             {
                 var message = $"新しいバージョンがあります。\n\n現在: {_updateService.CurrentVersion}\n最新: {latest.Version}\n\n更新しますか？";
                 if (AskYesNo(message) != true) return;
@@ -3126,3 +2981,4 @@ public partial class MainWindow : Window
             System.Windows.MessageBoxImage.Information);
     }
 }
+

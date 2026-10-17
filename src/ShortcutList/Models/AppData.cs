@@ -7,5 +7,7 @@ public class AppData
     public List<WorkspaceItem> Workspaces { get; set; } = new();
     public List<CommandItem> Commands { get; set; } = new();
     public List<OperationLogItem> Logs { get; set; } = new();
+    public List<BookmarkSource> BookmarkSources { get; set; } = new();
     public AppSettings Settings { get; set; } = new();
 }
+

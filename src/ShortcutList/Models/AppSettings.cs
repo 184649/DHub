@@ -4,6 +4,8 @@ public class AppSettings
 {
     public int SchemaVersion { get; set; } = 4;
 
+    public bool ShowLauncherBar { get; set; } = false;
+
     public bool StartMinimizedToTray { get; set; } = false;
 
     public bool ShowNameColumn { get; set; } = true;
@@ -35,3 +37,4 @@ public class AppSettings
     public int OperationLogKeepCount { get; set; } = 1000;
     public bool EnableSeparatedDataFiles { get; set; } = true;
 }
+
