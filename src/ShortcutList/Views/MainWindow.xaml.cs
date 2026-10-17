@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 30236)
-Total output lines: 2997
-
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -1621,7 +1618,34 @@ public partial class MainWindow : Window
             if (ShowWorkspaceEditDialog(workspace, isNew: true))
             {
                 _store.AddWorkspace(workspace);
-  …236 tokens truncated… (_, _) =>
+                refresh();
+                RefreshTrayMenu();
+            }
+        };
+
+        edit.Click += (_, _) =>
+        {
+            if (list.SelectedItem is not WorkspaceItem workspace) return;
+            if (ShowWorkspaceEditDialog(workspace, isNew: false))
+            {
+                workspace.TouchUpdated();
+                _store.Save();
+                refresh();
+                RefreshTrayMenu();
+            }
+        };
+
+        delete.Click += (_, _) =>
+        {
+            if (list.SelectedItem is not WorkspaceItem workspace) return;
+            if (Forms.MessageBox.Show($"「{workspace.Name}」を削除しますか？", "DHub", Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Question) != Forms.DialogResult.Yes) return;
+            _store.RemoveWorkspace(workspace);
+            refresh();
+            RefreshTrayMenu();
+        };
+
+        close.Click += (_, _) => form.Close();
+        list.DoubleClick += (_, _) =>
         {
             if (list.SelectedItem is WorkspaceItem workspace)
             {
