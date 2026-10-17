@@ -1,6 +1,9 @@
 {
   "version": "1.0.2",
-  "downloadUrl": "https://raw.githubusercontent.com/Chairman-bits/DHub/main/DHub.zip",
-  "updaterUrl": "https://raw.githubusercontent.com/Chairman-bits/DHub/main/DHubUpdater.zip",
-  "releaseNotes": "https://raw.githubusercontent.com/Chairman-bits/DHub/main/release-notes.json"
+  "downloadUrl": "https://raw.githubusercontent.com/184649/DHub/main/DHub.zip",
+  "updaterUrl": "https://raw.githubusercontent.com/184649/DHub/main/DHubUpdater.zip",
+  "downloadSha256": "REPLACED_BY_BUILD_BAT_SHA256",
+  "updaterSha256": "REPLACED_BY_BUILD_BAT_SHA256",
+  "releaseNotes": "https://raw.githubusercontent.com/184649/DHub/main/release-notes.json"
 }
+

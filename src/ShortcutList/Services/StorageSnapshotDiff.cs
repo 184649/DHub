@@ -16,7 +16,7 @@ internal static class StorageSnapshotDiff
             {
                 if (!right.TryGetValue(id(item), out var other)) differences.Add($"統合のみにある{kind}: {description(item)}");
                 else if (JsonSerializer.Serialize(item, options) != JsonSerializer.Serialize(other, options))
-                    differences.Add($"{kind}の変更: 統合 [{description(item)}] → 分離 [{description(other)}]");
+                    differences.Add($"{kind}の変更: 統合 [{description(item)}] → 分離 [{description(other)}] / {ChangedFields(item, other, options)}");
             }
             foreach (var item in b)
                 if (!left.ContainsKey(id(item))) differences.Add($"分離のみにある{kind}: {description(item)}");
@@ -39,6 +39,17 @@ internal static class StorageSnapshotDiff
         const int limit = 20;
         return $"差分 {differences.Count} 件 (統合 → 分離):\n" + string.Join("\n", differences.Take(limit).Select(x => "・" + x)) +
             (differences.Count > limit ? $"\nほか {differences.Count - limit} 件。元ファイルは選択前に保全します。" : string.Empty);
+    }
+
+    private static string ChangedFields<T>(T before, T after, JsonSerializerOptions options)
+    {
+        var a = JsonSerializer.SerializeToElement(before, options);
+        var b = JsonSerializer.SerializeToElement(after, options);
+        var changed = new List<string>();
+        foreach (var property in a.EnumerateObject())
+            if (b.TryGetProperty(property.Name, out var other) && property.Value.GetRawText() != other.GetRawText())
+                changed.Add($"{property.Name}: {Short(property.Value.ToString())} → {Short(other.ToString())}");
+        return string.Join("; ", changed.Take(6)) + (changed.Count > 6 ? $"; 他 {changed.Count - 6} 項目" : string.Empty);
     }
 
     private static string Short(string? text)

@@ -25,10 +25,12 @@ an assertion fails. The direct runner treats compiler warnings as errors.
 Covered: staged split parsing; disabled split mode; missing/corrupt main and
 backup recovery without writes; incomplete/mismatched split preservation;
 read-only mutation guards; explicit reconciliation with original file copies
-verified by SHA-256; stale-file detection; valid backup retention; atomic single
+verified by SHA-256; stale-file detection; valid backup retention; pre-parse/post-save fingerprint safeguards; atomic single
 file replacement and failed replacement evidence; invalid IDs/references;
 non-destructive full-recipe deduplication and workspace reference remapping;
-bookmark-source preservation; and Windows argument quoting without process start.
+bookmark-source preservation; Windows argument quoting without process start; and cached/async shortcut status
+(initial unknown, actual existing/missing files/folders, invalidation, stale-result
+rejection, read-only search getters, and exclusion from persisted JSON).
 
 ## Storage contract and remaining limits
 

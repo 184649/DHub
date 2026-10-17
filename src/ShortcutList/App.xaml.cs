@@ -11,7 +11,7 @@ public partial class App : System.Windows.Application
     {
         DispatcherUnhandledException += (_, args) =>
         {
-            if (args.Exception is System.IO.IOException or UnauthorizedAccessException ||
+            if (args.Exception is System.IO.IOException or System.IO.InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException ||
                 (args.Exception is InvalidOperationException && args.Exception.StackTrace?.Contains("ShortcutStore") == true))
             {
                 System.Windows.MessageBox.Show("操作を完了できませんでした。変更はまだ保存されていない可能性があります。\n" + args.Exception.Message,

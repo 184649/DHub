@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <StartupObject>UpdaterRegression.Program</StartupObject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/ShortcutList/Services/UpdateService.cs" Link="Source/UpdateService.cs" />
+    <Compile Include="../../src/ShortcutList/Models/VersionInfo.cs" Link="Source/VersionInfo.cs" />
+    <Compile Include="../../src/Shared/UpdatePackageSafety.cs" Link="Source/UpdatePackageSafety.cs" />
+    <Compile Include="../../src/Updater/Program.cs" Link="Source/UpdaterProgram.cs" />
+  </ItemGroup>
+</Project>

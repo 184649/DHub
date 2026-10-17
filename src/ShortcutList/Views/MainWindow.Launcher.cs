@@ -13,6 +13,31 @@ public partial class MainWindow
 {
     private readonly BookmarkSourceService _bookmarkService = new();
     private Window? _launcherBar;
+    private readonly PopupOwner _popupOwner = new();
+    private IntPtr _popupPreviousWindow;
+    private bool _popupActive;
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    private sealed class PopupOwner : Forms.NativeWindow, IDisposable
+    {
+        public PopupOwner() => CreateHandle(new Forms.CreateParams { Caption = "DHub popup owner" });
+        public void Dispose() => DestroyHandle();
+    }
+    private void ShowLauncherPopup()
+    {
+        RefreshTrayMenu();
+        var menu = _notifyIcon?.ContextMenuStrip;
+        if (menu is null) return;
+        _popupPreviousWindow = GetForegroundWindow();
+        _popupActive = true;
+        SetForegroundWindow(_popupOwner.Handle);
+        menu.Show(Forms.Cursor.Position);
+    }
+
     private bool _historySavePending;
     private bool _trayRefreshPending;
 
@@ -23,13 +48,14 @@ public partial class MainWindow
         _notifyIcon.MouseClick += (_, e) =>
         {
             if (e.Button == Forms.MouseButtons.Left)
-                Dispatcher.Invoke(() => _notifyIcon.ContextMenuStrip?.Show(Forms.Cursor.Position));
+                Dispatcher.Invoke(ShowLauncherPopup);
         };
         RefreshTrayMenu();
         _ = RefreshBookmarkSourcesAsync();
         if (_store.Settings.ShowLauncherBar) ShowLauncherBar();
     }
 
+    private static string CompactLabel(string value, int limit) => value.Length <= limit ? value : value[..(limit / 2)] + "…" + value[^(limit / 2)..];
     private static string MenuText(string value) => value.Replace("&", "&&");
     private static string Recipe(ShortcutItem item) =>
         System.Text.Json.JsonSerializer.Serialize(new { item.Id, item.TargetPath, item.Arguments,
@@ -39,7 +65,8 @@ public partial class MainWindow
     {
         var recipe = Recipe(item);
         var suffix = string.IsNullOrWhiteSpace(item.Arguments) ? item.OpenApplicationDisplay : item.Arguments;
-        var row = new Forms.ToolStripMenuItem(MenuText($"{item.IconText} {item.Name} · {suffix} · {item.TargetPath}"))
+        var disambiguator = _store.Items.Count(x => x.Name == item.Name) > 1 ? $" [{item.Id[..Math.Min(6, item.Id.Length)]}]" : "";
+        var row = new Forms.ToolStripMenuItem(MenuText($"{item.IconText} {CompactLabel(item.Name, 40)}{disambiguator} · {CompactLabel(suffix, 30)} · {CompactLabel(item.TargetPath, 56)}"))
         { ToolTipText = $"{item.TargetPath}\n{item.OpenApplicationPath} {item.OpenApplicationArguments}\n{item.Arguments}" };
         row.Click += (_, _) => Dispatcher.Invoke(() =>
         {
@@ -65,12 +92,13 @@ public partial class MainWindow
         foreach (var source in _store.BookmarkSources)
         {
             var snapshot = _bookmarkService.GetSnapshot(source.Id);
+            var children = snapshot.Entries.ToLookup(x => Path.GetDirectoryName(x.RelativePath) ?? "", StringComparer.OrdinalIgnoreCase);
             var sourceMenu = new Forms.ToolStripMenuItem(MenuText("📁 " + source.Name));
             AddTrayAction(sourceMenu.DropDownItems, "この登録元フォルダーを開く", () => OpenBookmarkRoot(source));
             AddTrayAction(sourceMenu.DropDownItems, "全件表示 / 検索", () => ShowBookmarkBrowser(source));
             sourceMenu.DropDownItems.Add(new Forms.ToolStripMenuItem(MenuText(snapshot.Status)) { Enabled = false });
             foreach (var entry in snapshot.Entries.Where(x => !x.RelativePath.Contains(Path.DirectorySeparatorChar)).Take(30))
-                AddBookmarkMenuEntry(sourceMenu.DropDownItems, source, snapshot, entry, 0);
+                AddBookmarkMenuEntry(sourceMenu.DropDownItems, source, snapshot, entry, children);
             if (snapshot.Entries.Count > 30)
                 AddTrayAction(sourceMenu.DropDownItems, "続きを全件表示 / 検索", () => ShowBookmarkBrowser(source));
             menu.Items.Add(sourceMenu);
@@ -81,6 +109,45 @@ public partial class MainWindow
             recent.DropDownItems.Add(CreateLaunchMenuItem(item));
         recent.Enabled = recent.DropDownItems.Count > 0;
         menu.Items.Add(recent);
+        var more = new Forms.ToolStripMenuItem("ワークスペース / コマンド / グループ");
+        var workspaces = new Forms.ToolStripMenuItem("ワークスペース");
+        foreach (var workspace in _store.Workspaces.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).Take(30))
+        {
+            var recipe = string.Join("\\n", workspace.ShortcutIds) + ":" + workspace.DelaySeconds;
+            AddTrayAction(workspaces.DropDownItems, MenuText(workspace.Name), () =>
+            {
+                if (!_store.Workspaces.Contains(workspace) || recipe != string.Join("\\n", workspace.ShortcutIds) + ":" + workspace.DelaySeconds)
+                    { ShowInfo("作業セットが変更されました。メニューを開き直してください。"); return; }
+                LaunchWorkspace(workspace);
+            });
+        }
+        AddTrayAction(workspaces.DropDownItems, $"全件 / 管理（{_store.Workspaces.Count} 件）", ShowWorkspaceManager);
+        more.DropDownItems.Add(workspaces);
+        var commands = new Forms.ToolStripMenuItem("コマンド");
+        foreach (var command in _store.Commands.OrderByDescending(x => x.IsFavorite).ThenBy(x => x.Name).Take(30))
+        {
+            var recipe = System.Text.Json.JsonSerializer.Serialize(command);
+            AddTrayAction(commands.DropDownItems, MenuText(command.Name), () =>
+            {
+                if (System.Text.Json.JsonSerializer.Serialize(command) != recipe)
+                    { ShowInfo("コマンドが変更されました。メニューを開き直してください。"); return; }
+                RunCommand(command);
+            });
+        }
+        AddTrayAction(commands.DropDownItems, $"全件 / 管理（{_store.Commands.Count} 件）", ShowCommandManager);
+        more.DropDownItems.Add(commands);
+        var groups = new Forms.ToolStripMenuItem("グループ");
+        foreach (var group in _store.Items.GroupBy(x => x.GroupDisplay).OrderBy(x => x.Key).Take(30))
+        {
+            var groupMenu = new Forms.ToolStripMenuItem(MenuText(group.Key));
+            var entries = group.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ToList();
+            foreach (var item in entries.Take(30)) groupMenu.DropDownItems.Add(CreateLaunchMenuItem(item));
+            AddTrayAction(groupMenu.DropDownItems, $"全件表示 / 検索（{entries.Count} 件）", () => ShowFavoriteSearch(entries));
+            groups.DropDownItems.Add(groupMenu);
+        }
+        AddTrayAction(groups.DropDownItems, "すべてのグループを検索", ShowQuickSearch);
+        more.DropDownItems.Add(groups);
+        menu.Items.Add(more);
         var manage = new Forms.ToolStripMenuItem("管理");
         AddTrayAction(manage.DropDownItems, "管理画面を開く", ShowMainWindowFromTray);
         AddTrayAction(manage.DropDownItems, "ホーム", ShowHomeDashboard);
@@ -100,21 +167,29 @@ public partial class MainWindow
         AddTrayAction(manage.DropDownItems, "保存データの確認 / 復旧", ShowStorageRecovery);
         AddTrayAction(manage.DropDownItems, "未保存の履歴を再保存", () =>
         {
+            if (_store.IsReadOnly) { ShowStorageRecovery(); return; }
             try { _store.Save(); _historySavePending = false; ShowInfo("履歴を保存しました。起動要求は再送していません。"); }
             catch (Exception ex) { ShowInfo("保存できませんでした。\n" + ex.Message); }
         }).Enabled = _historySavePending;
         AddTrayAction(manage.DropDownItems, "小型ランチャーバーを表示 / 非表示", () =>
         {
             if (!EnsureEditingAllowed()) return;
-            _store.Settings.ShowLauncherBar = !_store.Settings.ShowLauncherBar;
+            _store.Settings.ShowLauncherBar = _launcherBar?.IsVisible != true;
             _store.Save();
             if (_store.Settings.ShowLauncherBar) ShowLauncherBar(); else _launcherBar?.Hide();
         });
         AddTrayAction(manage.DropDownItems, "更新を確認", () => _ = CheckUpdateAsync(false));
         menu.Items.Add(manage);
         AddTrayAction(menu.Items, "終了", () => { _isExitRequested = true; System.Windows.Application.Current.Shutdown(); });
-        menu.Closed += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+        menu.Closed += (_, args) => Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (_popupActive)
+            {
+                _popupActive = false;
+                PostMessage(_popupOwner.Handle, 0, IntPtr.Zero, IntPtr.Zero);
+                if (args.CloseReason == Forms.ToolStripDropDownCloseReason.Keyboard && _popupPreviousWindow != IntPtr.Zero)
+                    SetForegroundWindow(_popupPreviousWindow);
+            }
             if (_trayRefreshPending) { _trayRefreshPending = false; RefreshTrayMenu(); }
             _ = RefreshBookmarkSourcesAsync();
         }));
@@ -133,8 +208,8 @@ public partial class MainWindow
 
     private void ShowFavoriteSearch(IReadOnlyList<ShortcutItem> favorites)
     {
-        _quickSearchWindow ??= new QuickSearchWindow();
-        _quickSearchWindow.LaunchRequested -= QuickSearchWindow_LaunchRequested;
+        EnsureQuickSearchWindow();
+        _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.ShowSearch(favorites);
     }
@@ -148,24 +223,32 @@ public partial class MainWindow
     }
 
     private void AddBookmarkMenuEntry(Forms.ToolStripItemCollection rows, BookmarkSource source,
-        BookmarkSnapshot snapshot, BookmarkEntry entry, int depth)
+        BookmarkSnapshot snapshot, BookmarkEntry entry, ILookup<string, BookmarkEntry> children)
     {
         var row = new Forms.ToolStripMenuItem(MenuText((entry.IsFolder ? "📁 " : "📄 ") + entry.Name)) { ToolTipText = entry.FullPath };
         if (!entry.IsFolder) row.Click += (_, _) => Dispatcher.Invoke(() => LaunchBookmark(snapshot, entry));
         else
         {
-            AddTrayAction(row.DropDownItems, "このフォルダーを開く", () => LaunchBookmark(snapshot, entry));
-            if (depth < 3)
-                foreach (var child in snapshot.Entries.Where(x => Path.GetDirectoryName(x.RelativePath) == entry.RelativePath).Take(25))
-                    AddBookmarkMenuEntry(row.DropDownItems, source, snapshot, child, depth + 1);
-            AddTrayAction(row.DropDownItems, "全件表示 / 検索", () => ShowBookmarkBrowser(source, entry.RelativePath));
+            row.DropDownItems.Add(new Forms.ToolStripMenuItem("読込中") { Enabled = false });
+            row.DropDownOpening += (_, _) =>
+            {
+                row.DropDownItems.Clear();
+                AddTrayAction(row.DropDownItems, "このフォルダーを開く", () => LaunchBookmark(snapshot, entry));
+                foreach (var child in children[entry.RelativePath].Take(25))
+                    AddBookmarkMenuEntry(row.DropDownItems, source, snapshot, child, children);
+                AddTrayAction(row.DropDownItems, "全件表示 / 検索", () => ShowBookmarkBrowser(source, entry.RelativePath));
+            };
         }
         rows.Add(row);
     }
 
     private void LaunchBookmark(BookmarkSnapshot snapshot, BookmarkEntry entry)
     {
-        if (!_store.BookmarkSources.Any(s => s.Id == entry.SourceId) || !_bookmarkService.IsCurrent(snapshot, entry))
+        var source = _store.BookmarkSources.FirstOrDefault(s => s.Id == entry.SourceId);
+        if (source is null ||
+            !string.Equals(Path.GetFullPath(Path.Combine(source.FolderPath, entry.RelativePath)), entry.FullPath, StringComparison.OrdinalIgnoreCase) ||
+            source.HiddenPaths.Any(h => string.Equals(h, entry.RelativePath, StringComparison.OrdinalIgnoreCase) || entry.RelativePath.StartsWith(h + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) ||
+            !_bookmarkService.IsCurrent(snapshot, entry))
         { ShowInfo("登録元の変更を検知しました。再読込後に選び直してください。"); return; }
         try
         {
@@ -178,6 +261,7 @@ public partial class MainWindow
 
     private void OpenBookmarkRoot(BookmarkSource source)
     {
+        if (!_store.BookmarkSources.Contains(source)) { ShowInfo("この登録元は変更または解除されました。"); return; }
         try { ShortcutRunner.Run(new ShortcutItem { TargetPath = source.FolderPath, ShortcutType = ShortcutType.Folder }); }
         catch (Exception ex) { ShowInfo("登録元を開けませんでした。\n" + ex.Message); }
     }
@@ -256,6 +340,12 @@ public partial class MainWindow
         list.DoubleClick += (_, _) => { if (list.SelectedItem is BookmarkEntry entry) LaunchBookmark(snapshot, entry); };
         list.KeyDown += (_, e) => { if (e.KeyCode == Forms.Keys.Enter && list.SelectedItem is BookmarkEntry entry) { e.Handled = true; LaunchBookmark(snapshot, entry); } };
         form.Controls.Add(list); form.Controls.Add(search); form.Controls.Add(actions); form.Controls.Add(status);
+        form.Shown += async (_, _) =>
+        {
+            refresh.Enabled = false; status.Text = "読込中";
+            try { var next = await _bookmarkService.RefreshAsync(source); if (form.IsDisposed) return; snapshot = next; Filter(); }
+            finally { if (!form.IsDisposed) refresh.Enabled = true; }
+        };
         Filter(); form.ShowDialog();
     }
 
@@ -264,20 +354,30 @@ public partial class MainWindow
         using var form = new Forms.Form { Text = "保存データの確認 / 復旧", Width = 760, Height = 480,
             StartPosition = Forms.FormStartPosition.CenterScreen };
         var preview = new Forms.TextBox { Dock = Forms.DockStyle.Fill, Multiline = true, ReadOnly = true,
-            ScrollBars = Forms.ScrollBars.Both, Text = _store.StorageConflictSummary };
+            ScrollBars = Forms.ScrollBars.Both, Text = _store.StorageConflictSummary + "\n" + _store.LastLoadMessage };
+
         var buttons = new Forms.FlowLayoutPanel { Dock = Forms.DockStyle.Bottom, Height = 48 };
         void Add(string label, bool enabled, bool separated)
         {
             var button = new Forms.Button { Text = label, AutoSize = true, Enabled = enabled };
             button.Click += (_, _) =>
             {
-                if (AskYesNo(label + "を採用しますか？\n現在の原ファイル一式を専用保全フォルダーへコピーしてから保存します。") != true) return;
+                if (AskYesNo(label + "を採用しますか？\n現在の原ファイル一式を専用保全フォルダーへコピーしてから保存します。未保存の編集・履歴は選択した状態へ戻ります。") != true) return;
                 try { _store.ResolveSeparatedDataConflict(separated); ApplyFilter(); RefreshTrayMenu(); form.Close(); ShowInfo("選択したデータを保存しました。原ファイルの保全先: " + Path.Combine(_store.StorageFolder, "PreservedSnapshots")); }
                 catch (Exception ex) { ShowInfo("復旧できませんでした。\n" + ex.Message); }
             };
             buttons.Controls.Add(button);
         }
         Add("本体データ", _store.CanUseCombinedData, false); Add("分離データ", _store.CanUseSeparatedData, true);
+        var reload = new Forms.Button { Text = "ディスクから再読込", AutoSize = true };
+        reload.Click += (_, _) =>
+        {
+            if (AskYesNo("ディスクの保存データを再読込しますか？未保存の編集・履歴は失われる可能性があります。必要なら先に全データをエクスポートしてください。") != true) return;
+            _store.Load(); ApplyFilter(); RefreshTrayMenu(); form.Close(); ShowStorageRecovery();
+        };
+        buttons.Controls.Add(reload);
+        var export = new Forms.Button { Text = "現在の内容をエクスポート", AutoSize = true };
+        export.Click += (_, _) => ExportFullBackup(); buttons.Controls.Add(export);
         form.Controls.Add(preview); form.Controls.Add(buttons); form.ShowDialog();
     }
 
@@ -285,11 +385,11 @@ public partial class MainWindow
     {
         if (_launcherBar is null)
         {
-            var button = new System.Windows.Controls.Button { Content = "DHub ▾", Padding = new Thickness(16, 8),
+            var button = new System.Windows.Controls.Button { Content = "DHub ▾", Padding = new Thickness(16, 8, 16, 8),
                 ToolTip = "クリックでお気に入り。タイトル部分をドラッグして移動。閉じるとトレイに戻ります。" };
             _launcherBar = new Window { Title = "DHub", Width = 130, Height = 72, Content = button,
                 ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, ShowInTaskbar = false };
-            button.Click += (_, _) => _notifyIcon?.ContextMenuStrip?.Show(Forms.Cursor.Position);
+            button.Click += (_, _) => ShowLauncherPopup();
             _launcherBar.Closing += (_, e) => { if (!_isExitRequested) { e.Cancel = true; _launcherBar.Hide(); } };
         }
         _launcherBar.Show(); _launcherBar.Activate();

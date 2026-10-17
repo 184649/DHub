@@ -19,9 +19,12 @@ public sealed class BookmarkSourceService : IDisposable
         public readonly object Gate = new();
         public long Revision;
         public string Path = string.Empty;
+        public string HiddenKey = string.Empty;
         public BookmarkSnapshot? Snapshot;
         public Task<BookmarkSnapshot>? Pending;
         public FileSystemWatcher? Watcher;
+        public bool WatcherHealthy;
+        public long RootCreated;
         public bool Removed;
     }
     private readonly ConcurrentDictionary<string, State> _states = new();
@@ -48,10 +51,14 @@ public sealed class BookmarkSourceService : IDisposable
             var path = source.FolderPath;
             if (!string.Equals(state.Path, path, StringComparison.Ordinal))
             {
-                state.Watcher?.Dispose(); state.Watcher = null; state.Snapshot = null;
+                state.Watcher?.Dispose(); state.Watcher = null; state.WatcherHealthy = false; state.Snapshot = null;
             }
             var hidden = new HashSet<string>(source.HiddenPaths ?? new(), StringComparer.OrdinalIgnoreCase);
-            var revision = state.Revision = Interlocked.Increment(ref _nextRevision);
+            var hiddenKey = string.Join("\n", hidden.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            if (state.Revision == 0 || state.Snapshot is null || state.HiddenKey != hiddenKey)
+                state.Revision = Interlocked.Increment(ref _nextRevision);
+            state.HiddenKey = hiddenKey;
+            var revision = state.Revision;
             state.Path = path;
             state.Pending = Task.Run(() => Scan(source.Id, path, hidden, state, revision));
             return state.Pending;
@@ -69,21 +76,37 @@ public sealed class BookmarkSourceService : IDisposable
                 throw new IOException("リンクされたフォルダーは登録元にできません");
             lock (state.Gate)
             {
+                if (state.Watcher is not null && state.RootCreated != root.CreationTimeUtc.Ticks)
+                {
+                    state.Watcher.Dispose(); state.Watcher = null; state.WatcherHealthy = false;
+                    Interlocked.Exchange(ref state.Revision, Interlocked.Increment(ref _nextRevision));
+                }
                 if (!state.Removed && state.Watcher is null)
                 {
                     try
                     {
                         var watcher = new FileSystemWatcher(path) { IncludeSubdirectories = true,
                             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size };
-                        FileSystemEventHandler invalidate = (_, _) => Interlocked.Exchange(ref state.Revision, Interlocked.Increment(ref _nextRevision));
+                        FileSystemEventHandler invalidate = (_, _) => Invalidate(state);
                         watcher.Changed += invalidate; watcher.Created += invalidate; watcher.Deleted += invalidate;
-                        watcher.Renamed += (_, _) => Interlocked.Exchange(ref state.Revision, Interlocked.Increment(ref _nextRevision));
-                        watcher.Error += (_, _) => Interlocked.Exchange(ref state.Revision, Interlocked.Increment(ref _nextRevision));
-                        watcher.EnableRaisingEvents = true;
+                        watcher.Renamed += (_, _) => Invalidate(state);
+                        watcher.Error += (_, _) =>
+                        {
+                            lock (state.Gate)
+                            {
+                                if (!ReferenceEquals(state.Watcher, watcher)) return;
+                                state.WatcherHealthy = false; state.Watcher = null;
+                                Interlocked.Exchange(ref state.Revision, Interlocked.Increment(ref _nextRevision));
+                            }
+                            ThreadPool.QueueUserWorkItem(_ => watcher.Dispose());
+                        };
                         state.Watcher = watcher;
+                        state.RootCreated = root.CreationTimeUtc.Ticks;
+                        watcher.EnableRaisingEvents = true;
+                        state.WatcherHealthy = true;
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-                    { /* Manual refresh remains available when watching is unsupported. */ }
+                    { state.Watcher?.Dispose(); state.Watcher = null; state.WatcherHealthy = false; }
                 }
             }
             var entries = new List<BookmarkEntry>();
@@ -119,13 +142,23 @@ public sealed class BookmarkSourceService : IDisposable
             var status = ordered.Length == 0 ? (hidden.Count > 0 ? "空、または全項目が非表示" : "空のフォルダー") : $"{ordered.Length} 件";
             if (truncated) status += "（上限到達。登録元を開くと全件に到達できます）";
             if (skipped > 0) status += $" / {skipped} 件のリンク・読取不可を除外";
-            result = new(id, revision, ordered, status, true, truncated);
+            if (!state.WatcherHealthy) status += " / 監視不可: 元フォルダーから開いてください";
+            result = new(id, revision, ordered, status, state.WatcherHealthy, truncated);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        { result = new(id, revision, Array.Empty<BookmarkEntry>(), "オフライン / 読取不可: " + ex.Message, false); }
+        {
+            lock (state.Gate) { state.Watcher?.Dispose(); state.Watcher = null; state.WatcherHealthy = false; }
+            result = new(id, revision, Array.Empty<BookmarkEntry>(), "オフライン / 読取不可: " + ex.Message, false);
+        }
         lock (state.Gate)
         {
-            if (!state.Removed && revision == state.Revision) state.Snapshot = result;
+            if (!state.Removed && revision == state.Revision)
+            {
+                if (state.Snapshot is { } previous &&
+                    (previous.CanLaunch != result.CanLaunch || !previous.Entries.SequenceEqual(result.Entries)))
+                    result = result with { Revision = state.Revision = Interlocked.Increment(ref _nextRevision) };
+                state.Snapshot = result;
+            }
             else
             {
                 result = result with { CanLaunch = false, Status = "変更を検知しました。再読込してください" };
@@ -139,8 +172,14 @@ public sealed class BookmarkSourceService : IDisposable
     {
         if (!_states.TryGetValue(entry.SourceId, out var state)) return false;
         lock (state.Gate)
-            return !state.Removed && snapshot.CanLaunch && snapshot.Revision == state.Revision &&
+            return !state.Removed && state.WatcherHealthy && snapshot.CanLaunch && snapshot.Revision == state.Revision &&
                 state.Snapshot?.Entries.Any(x => x.RelativePath == entry.RelativePath && x.Fingerprint == entry.Fingerprint) == true;
+    }
+
+    private void Invalidate(State state)
+    {
+        lock (state.Gate)
+            if (!state.Removed) state.Revision = Interlocked.Increment(ref _nextRevision);
     }
 
     public void Remove(string id)

@@ -66,4 +66,21 @@ PASS preserved files have a verified hash manifest
 PASS Windows argv quoting empty argument
 PASS Windows argv quoting trailing slash
 PASS Windows argv quoting embedded quote
-68/68 tests passed
+PASS load-time file change cannot become stale-save baseline
+PASS raw manifest-like file is preserved without receipt collision
+PASS metadata-only conflict preview names changed field
+PASS expected output hash equals actual persisted UTF8 bytes
+PASS unrecoverable read cannot create an empty recovery backup
+PASS removing an absent instance does not remove another item's references
+PASS file status starts unknown without synchronous getter probe
+PASS existing file status becomes known after async refresh
+PASS missing file status becomes broken after async refresh
+PASS status getters retain cached result after filesystem changes
+PASS target path edit invalidates cached status
+PASS shortcut type edit invalidates cached status
+PASS existing and missing folder statuses refresh asynchronously
+PASS SearchText reads do not trigger status checks
+PASS RefreshStatus only invalidates until async work is requested
+PASS transient status cache is excluded from persistence
+PASS stale async completion cannot publish old target status
+85/85 tests passed

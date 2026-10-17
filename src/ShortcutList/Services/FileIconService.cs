@@ -13,7 +13,8 @@ namespace ShortcutList.Services;
 public static class FileIconService
 {
     public static bool IsEnabled { get; set; } = true;
-    private static readonly ConcurrentDictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Task<ImageSource?>> Cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly SemaphoreSlim Gate = new(4, 4);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
@@ -21,36 +22,35 @@ public static class FileIconService
     public static ImageSource? GetIcon(ShortcutItem item)
     {
         if (!IsEnabled) return null;
-        try
+        // Cache keys and binding getters never probe the filesystem.
+        var key = $"{item.ShortcutType}|{item.TargetPath}|{item.OpenApplicationPath}";
+        if (Cache.TryGetValue(key, out var cached))
         {
-            var key = BuildCacheKey(item);
-            if (string.IsNullOrWhiteSpace(key)) return null;
-            return Cache.GetOrAdd(key, _ => LoadIcon(item));
+            if (!cached.IsCompleted) _ = NotifyWhenReadyAsync(cached, item);
+            return cached.IsCompletedSuccessfully ? cached.Result : null;
         }
-        catch
-        {
-            return null;
-        }
+        if (Cache.Count >= 2048) return null;
+        var snapshot = new ShortcutItem { TargetPath = item.TargetPath, ShortcutType = item.ShortcutType,
+            OpenApplicationPath = item.OpenApplicationPath };
+        var task = Cache.GetOrAdd(key, _ => LoadIconAsync(snapshot));
+        _ = NotifyWhenReadyAsync(task, item);
+        return task.IsCompletedSuccessfully ? task.Result : null;
     }
 
-    private static string BuildCacheKey(ShortcutItem item)
+    private static async Task<ImageSource?> LoadIconAsync(ShortcutItem item)
     {
-        if (item.ShortcutType == ShortcutType.Url)
-        {
-            var app = item.OpenApplicationPath;
-            if (!string.IsNullOrWhiteSpace(app)) return "url:" + app;
-            return "url";
-        }
+        await Gate.WaitAsync().ConfigureAwait(false);
+        try { return await Task.Run(() => LoadIcon(item)).ConfigureAwait(false); }
+        catch { return null; }
+        finally { Gate.Release(); }
+    }
 
-        if (item.ShortcutType == ShortcutType.Folder)
-        {
-            return "folder";
-        }
-
-        var path = item.TargetPath;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) return path;
-        var ext = Path.GetExtension(path);
-        return string.IsNullOrWhiteSpace(ext) ? "file" : "ext:" + ext;
+    private static async Task NotifyWhenReadyAsync(Task<ImageSource?> task, ShortcutItem item)
+    {
+        await task.ConfigureAwait(false);
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.HasShutdownStarted)
+            _ = dispatcher.BeginInvoke(new Action(item.RefreshIcon));
     }
 
     private static ImageSource? LoadIcon(ShortcutItem item)
@@ -93,3 +93,4 @@ public static class FileIconService
         }
     }
 }
+

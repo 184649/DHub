@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Windows.Media;
@@ -25,6 +27,9 @@ public class ShortcutItem : INotifyPropertyChanged
     private int _launchCount;
     private DateTime? _lastLaunchedAt;
     private int _sortOrder;
+    private bool? _isBroken;
+    private Task? _statusRefresh;
+    private static readonly SemaphoreSlim StatusGate = new(4, 4);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -49,6 +54,8 @@ public class ShortcutItem : INotifyPropertyChanged
         {
             if (SetField(ref _targetPath, value ?? string.Empty))
             {
+                _isBroken = null;
+                OnPropertyChanged(nameof(IsStatusKnown));
                 OnPropertyChanged(nameof(SearchText));
                 OnPropertyChanged(nameof(TypeText));
                 OnPropertyChanged(nameof(IconText));
@@ -104,6 +111,8 @@ public class ShortcutItem : INotifyPropertyChanged
         {
             if (SetField(ref _shortcutType, value))
             {
+                _isBroken = null;
+                OnPropertyChanged(nameof(IsStatusKnown));
                 OnPropertyChanged(nameof(TypeText));
                 OnPropertyChanged(nameof(IconText));
                 OnPropertyChanged(nameof(IconImageSource));
@@ -217,15 +226,12 @@ public class ShortcutItem : INotifyPropertyChanged
     public string MemoDisplay => string.IsNullOrWhiteSpace(Memo) ? "-" : Memo;
 
     [JsonIgnore]
-    public bool IsBroken => ShortcutType switch
-    {
-        ShortcutType.Folder => !System.IO.Directory.Exists(TargetPath),
-        ShortcutType.File => !System.IO.File.Exists(TargetPath),
-        _ => false
-    };
+    public bool IsBroken => _isBroken == true;
+    [JsonIgnore]
+    public bool IsStatusKnown => _isBroken.HasValue;
 
     [JsonIgnore]
-    public string StatusText => IsBroken ? "未検出" : "OK";
+    public string StatusText => !IsStatusKnown ? "未確認" : IsBroken ? "未検出" : "OK";
 
     [JsonIgnore]
     public string LastLaunchedDisplay => LastLaunchedAt.HasValue ? LastLaunchedAt.Value.ToString("yyyy/MM/dd HH:mm") : "-";
@@ -289,10 +295,53 @@ public class ShortcutItem : INotifyPropertyChanged
 
     public void RefreshStatus()
     {
+        _isBroken = null;
+        OnPropertyChanged(nameof(IsStatusKnown));
         OnPropertyChanged(nameof(IsBroken));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(SearchText));
     }
+
+    public void RefreshIcon() => OnPropertyChanged(nameof(IconImageSource));
+
+    public Task RefreshStatusAsync()
+    {
+        if (_statusRefresh is { IsCompleted: false } pending) return RefreshAfterPendingAsync(pending);
+        return _statusRefresh = ReadStatusAsync();
+    }
+
+    private async Task RefreshAfterPendingAsync(Task pending)
+    {
+        await pending;
+        if (!IsStatusKnown) await RefreshStatusAsync();
+    }
+
+    private async Task ReadStatusAsync()
+    {
+        var target = TargetPath;
+        var kind = ShortcutType;
+        await StatusGate.WaitAsync();
+        try
+        {
+            var missing = await Task.Run(() => kind switch
+            {
+                ShortcutType.Folder => !System.IO.Directory.Exists(target),
+                ShortcutType.File => !System.IO.File.Exists(target),
+                _ => false
+            });
+            if (TargetPath != target || ShortcutType != kind) return;
+            _isBroken = missing;
+            OnPropertyChanged(nameof(IsStatusKnown));
+            OnPropertyChanged(nameof(IsBroken));
+            OnPropertyChanged(nameof(StatusText));
+        }
+        finally { StatusGate.Release(); }
+    }
+
+    [JsonIgnore]
+    public string LaunchRecipeDisplay => $"{OpenApplicationDisplay} {OpenApplicationArguments} | {Arguments}";
+    [JsonIgnore]
+    public string LaunchRecipeTooltip => $"{Name}\n{TargetPath}\n{OpenApplicationPath} {OpenApplicationArguments}\n{Arguments}";
 
     public static IEnumerable<string> SplitTags(string? tags)
     {

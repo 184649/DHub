@@ -25,6 +25,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\DHub.ico" />
+    <Compile Include="..\Shared\UpdatePackageSafety.cs" Link="UpdatePackageSafety.cs" />
   </ItemGroup>
 </Project>
 

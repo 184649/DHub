@@ -1,180 +1,254 @@
-using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Threading;
+using System.Security.Cryptography;
+using DHub.Updating;
+
+namespace DHubUpdater;
 
 internal static class Program
 {
-    private const string AppExeName = "DHub.exe";
-    private const string UpdaterExeName = "DHubUpdater.exe";
-
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
+        string? workDirectory = null;
+        string? stagedExecutable = null;
+        string? dataDirectory = null;
+        string? appPathForRecovery = null;
+        var restart = false;
+        var originalExited = false;
+        var installed = false;
         try
         {
-            if (args.Length < 2)
+            var options = ParseArgs(args);
+            if (!options.TryGetValue("processId", out var processIdText) || !int.TryParse(processIdText, out var processId) || processId <= 0 ||
+                !options.TryGetValue("appPath", out var rawAppPath) || !Path.IsPathFullyQualified(rawAppPath) ||
+                !options.TryGetValue("appSha256", out var appSha256) ||
+                (options.ContainsKey("appZip") == options.ContainsKey("appZipPath")))
+                throw new ArgumentException("Usage: DHubUpdater --processId <id> --appPath <absolute path> (--appZipPath <path> | --appZip <official URL>) --appSha256 <SHA-256> [--restart]");
+            UpdatePackageSafety.ValidateHash(appSha256);
+            restart = options.ContainsKey("restart");
+            if (options.TryGetValue("dataDirectory", out dataDirectory))
             {
-                return 1;
+                if (!Path.IsPathFullyQualified(dataDirectory)) throw new ArgumentException("The data directory must be absolute.");
+                dataDirectory = Path.GetFullPath(dataDirectory);
             }
-
-            var appZipPath = args[0];
-            var targetExePath = args[1];
-
-            if (!File.Exists(appZipPath))
+            if (options.ContainsKey("readyFile") != options.ContainsKey("proceedFile")) throw new ArgumentException("Both handshake paths must be provided.");
+            if (options.ContainsKey("readyFile") && (!Path.IsPathFullyQualified(options["readyFile"]) || !Path.IsPathFullyQualified(options["proceedFile"])))
+                throw new ArgumentException("Handshake paths must be absolute.");
+            var appPath = Path.GetFullPath(rawAppPath);
+            if (!Path.GetFileName(appPath).Equals("DHub.exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(appPath))
+                throw new InvalidDataException("The existing DHub.exe was not found.");
+            if ((File.GetAttributes(appPath) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Updating a linked executable is not supported.");
+            var appDirectory = Path.GetDirectoryName(appPath)!;
+            appPathForRecovery = appPath;
+            // One updater per installation. Never kill an application or replace files while it is still running.
+            using var updateLock = new FileStream(Path.Combine(appDirectory, ".dindex-update.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
+            workDirectory = Path.Combine(Path.GetTempPath(), "DHubUpdater", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(workDirectory);
+            var zipPath = Path.Combine(workDirectory, "DHub.zip");
+            if (options.TryGetValue("appZipPath", out var sourceZip))
             {
-                return 2;
+                if (!Path.IsPathFullyQualified(sourceZip)) throw new InvalidDataException("The package path must be absolute.");
+                File.Copy(sourceZip, zipPath, overwrite: false);
+                await UpdatePackageSafety.VerifyFileHashAsync(zipPath, appSha256, CancellationToken.None);
             }
-
-            var targetDir = Path.GetDirectoryName(targetExePath);
-            if (string.IsNullOrWhiteSpace(targetDir))
+            else
             {
-                return 3;
+                await UpdatePackageSafety.DownloadVerifiedAsync(options["appZip"], zipPath, appSha256, CancellationToken.None);
             }
-
-            var extractDir = Path.Combine(
-                Path.GetTempPath(),
-                "DHub_Update_Extract_" + Guid.NewGuid().ToString("N"));
-
-            Directory.CreateDirectory(extractDir);
-            ZipFile.ExtractToDirectory(appZipPath, extractDir, overwriteFiles: true);
-
-            var newExePath = Directory
-                .EnumerateFiles(extractDir, AppExeName, SearchOption.AllDirectories)
-                .FirstOrDefault();
-
-            if (string.IsNullOrWhiteSpace(newExePath) || !File.Exists(newExePath))
+            var executable = await UpdatePackageSafety.ExtractExecutableAsync(zipPath, Path.Combine(workDirectory, "extract"), "DHub.exe", CancellationToken.None);
+            stagedExecutable = Path.Combine(appDirectory, $".DHub.{Guid.NewGuid():N}.staged");
+            using (var input = File.OpenRead(executable))
+            using (var output = new FileStream(stagedExecutable, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                return 4;
+                input.CopyTo(output);
+                output.Flush(flushToDisk: true);
             }
-
-            var sourceDir = Path.GetDirectoryName(newExePath);
-            if (string.IsNullOrWhiteSpace(sourceDir))
+            if (options.TryGetValue("readyFile", out var readyFile))
             {
-                return 5;
+                SignalReady(readyFile);
+                await WaitForProceedAsync(options["proceedFile"], TimeSpan.FromSeconds(60), CancellationToken.None);
             }
-
-            WaitForTargetToUnlock(targetExePath, TimeSpan.FromSeconds(60));
-
-            var backupDir = Path.Combine(
-                Path.GetTempPath(),
-                "DHub_Backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(backupDir);
-
-            BackupExistingFiles(targetDir, backupDir);
-            CopyDirectory(sourceDir, targetDir);
-
-            Process.Start(new ProcessStartInfo
+            Console.WriteLine("Package verified. Waiting for DHub to close...");
+            await WaitForProcessExitAsync(processId, appPath, TimeSpan.FromSeconds(60));
+            originalExited = true;
+            InstallVerifiedExecutable(stagedExecutable, appPath);
+            installed = true;
+            stagedExecutable = null;
+            if (restart)
             {
-                FileName = targetExePath,
-                UseShellExecute = true
-            });
-
-            TryDeleteDirectory(extractDir);
-            TryDeleteFile(appZipPath);
-
+                try
+                {
+                    using var process = StartApplication(appPath, dataDirectory);
+                    var exited = process.WaitForExitAsync();
+                    if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(2))) == exited)
+                        throw new InvalidOperationException($"The updated application exited immediately (code {process.ExitCode}).");
+                }
+                catch (Exception restartError)
+                {
+                    Rollback(appPath);
+                    try { using var restored = StartApplication(appPath, dataDirectory); }
+                    catch (Exception recoveryError) { throw new AggregateException("Update startup failed. The previous executable was restored, but automatic restart also failed.", restartError, recoveryError); }
+                    throw new InvalidOperationException("Update startup failed. The previous executable was restored and restarted.", restartError);
+                }
+            }
+            Console.WriteLine("Update completed. The previous executable is retained as DHub.exe.bak.");
             return 0;
         }
-        catch
+        catch (Exception ex)
         {
-            return 9;
+            Console.Error.WriteLine(ex);
+            if (restart && originalExited && !installed && appPathForRecovery is not null && File.Exists(appPathForRecovery))
+            {
+                try { using var restored = StartApplication(appPathForRecovery, dataDirectory); }
+                catch (Exception restartError) { ex = new AggregateException("Update failed; automatic restart of the previous application also failed.", ex, restartError); }
+            }
+            WriteErrorLog(ex, dataDirectory);
+            return 1;
+        }
+        finally
+        {
+            if (stagedExecutable is not null) UpdatePackageSafety.TryDelete(stagedExecutable);
+            if (workDirectory is not null)
+            {
+                try { Directory.Delete(workDirectory, true); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
     }
 
-    private static void WaitForTargetToUnlock(string targetExePath, TimeSpan timeout)
+    internal static void InstallVerifiedExecutable(string stagedExecutable, string appPath, Action<string, string, string>? replace = null)
     {
-        var start = DateTime.Now;
-
-        while (DateTime.Now - start < timeout)
+        UpdatePackageSafety.ValidatePortableExecutable(stagedExecutable);
+        UpdatePackageSafety.ValidatePortableExecutable(appPath);
+        var originalHash = HashFile(appPath);
+        try
+        {
+            // Windows can report failure after moving the original to its backup. Recover that state too.
+            if (replace is null) File.Replace(stagedExecutable, appPath, appPath + ".bak", ignoreMetadataErrors: true);
+            else replace(stagedExecutable, appPath, appPath + ".bak");
+        }
+        catch (Exception replacementError)
         {
             try
             {
-                if (!File.Exists(targetExePath))
+                if (!File.Exists(appPath) || !CryptographicOperations.FixedTimeEquals(originalHash, HashFile(appPath)))
                 {
-                    return;
+                    if (!File.Exists(appPath + ".bak") || !CryptographicOperations.FixedTimeEquals(originalHash, HashFile(appPath + ".bak")))
+                        throw new IOException("The original executable could not be located for recovery. Existing files were preserved.");
+                    Rollback(appPath);
                 }
-
-                using var stream = new FileStream(targetExePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-                return;
             }
-            catch
+            catch (Exception recoveryError)
             {
-                Thread.Sleep(500);
+                throw new AggregateException("Replacement failed and automatic recovery could not be completed. Preserve the .bak file for manual recovery.", replacementError, recoveryError);
             }
+            throw;
         }
     }
 
-    private static void BackupExistingFiles(string targetDir, string backupDir)
+    private static byte[] HashFile(string path)
     {
-        foreach (var file in Directory.EnumerateFiles(targetDir, "*", SearchOption.AllDirectories))
-        {
-            var relativePath = Path.GetRelativePath(targetDir, file);
-            var destination = Path.Combine(backupDir, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-
-            try
-            {
-                File.Copy(file, destination, overwrite: true);
-            }
-            catch
-            {
-                // バックアップできないファイルがあっても更新自体は継続します。
-            }
-        }
+        using var input = File.OpenRead(path);
+        return SHA256.HashData(input);
     }
 
-    private static void CopyDirectory(string sourceDir, string targetDir)
+    internal static void Rollback(string appPath)
     {
-        foreach (var directory in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories))
+        var backup = appPath + ".bak";
+        if (!File.Exists(backup)) throw new IOException("The backup executable could not be found; no rollback was attempted.");
+        UpdatePackageSafety.ValidatePortableExecutable(backup);
+        var recovery = Path.Combine(Path.GetDirectoryName(appPath)!, $".DHub.{Guid.NewGuid():N}.recovery");
+        try
         {
-            var relativePath = Path.GetRelativePath(sourceDir, directory);
-            Directory.CreateDirectory(Path.Combine(targetDir, relativePath));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
-        {
-            var fileName = Path.GetFileName(file);
-
-            // 実行中のアップデーター自身は、別途ダウンロードされた一時フォルダから動いているため、
-            // アプリ配布ZIPに含まれていても上書き失敗の原因にならないようにスキップします。
-            if (string.Equals(fileName, UpdaterExeName, StringComparison.OrdinalIgnoreCase))
+            using (var input = File.OpenRead(backup))
+            using (var output = new FileStream(recovery, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                continue;
+                input.CopyTo(output);
+                output.Flush(flushToDisk: true);
             }
+            if (File.Exists(appPath)) File.Replace(recovery, appPath, appPath + ".failed", ignoreMetadataErrors: true);
+            else File.Move(recovery, appPath);
+        }
+        finally { UpdatePackageSafety.TryDelete(recovery); }
+    }
 
-            var relativePath = Path.GetRelativePath(sourceDir, file);
-            var destination = Path.Combine(targetDir, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, overwrite: true);
+    private static Process StartApplication(string appPath, string? dataDirectory) => Process.Start(CreateRestartStartInfo(appPath, dataDirectory))
+        ?? throw new InvalidOperationException("DHub could not be started.");
+
+    internal static ProcessStartInfo CreateRestartStartInfo(string appPath, string? dataDirectory)
+    {
+        var start = new ProcessStartInfo { FileName = appPath, UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(appPath)! };
+        if (dataDirectory is not null)
+        {
+            start.ArgumentList.Add("--data-dir");
+            start.ArgumentList.Add(dataDirectory);
+        }
+        return start;
+    }
+
+    internal static void SignalReady(string path) => UpdatePackageSafety.WriteSignal(path);
+
+    internal static async Task WaitForProceedAsync(string path, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (UpdatePackageSafety.HasValidSignal(path)) return;
+            await Task.Delay(100, cancellationToken);
+        }
+        throw new TimeoutException("The application did not authorize the prepared update. The installed executable was not changed.");
+    }
+
+    internal static Dictionary<string, string> ParseArgs(string[] args)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var known = new HashSet<string>(new[] { "processId", "appPath", "appZip", "appZipPath", "appSha256", "dataDirectory", "readyFile", "proceedFile", "restart" }, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (!args[i].StartsWith("--", StringComparison.Ordinal)) throw new ArgumentException("Unexpected updater argument.");
+            var key = args[i][2..];
+            if (!known.Contains(key) || values.ContainsKey(key)) throw new ArgumentException("Unknown or duplicate updater option.");
+            if (key.Equals("restart", StringComparison.OrdinalIgnoreCase)) values.Add(key, "true");
+            else
+            {
+                if (++i == args.Length || args[i].StartsWith("--", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(args[i])) throw new ArgumentException("Missing updater argument value.");
+                values.Add(key, args[i]);
+            }
+        }
+        return values;
+    }
+
+    internal static async Task WaitForProcessExitAsync(int processId, string appPath, TimeSpan timeout)
+    {
+        Process process;
+        try { process = Process.GetProcessById(processId); }
+        catch (ArgumentException) { return; }
+        using (process)
+        {
+            if (process.HasExited) return;
+            string? processPath;
+            try { processPath = process.MainModule?.FileName; }
+            catch (Exception) when (process.HasExited) { return; }
+            if (processPath is null || !Path.GetFullPath(processPath).Equals(Path.GetFullPath(appPath), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The supplied process ID does not belong to this DHub installation.");
+            using var cancellation = new CancellationTokenSource(timeout);
+            try { await process.WaitForExitAsync(cancellation.Token); }
+            catch (OperationCanceledException) { throw new TimeoutException("DHub did not close in time. The installed executable was not changed."); }
         }
     }
 
-    private static void TryDeleteDirectory(string directory)
+    private static void WriteErrorLog(Exception exception, string? dataDirectory)
     {
         try
         {
-            if (Directory.Exists(directory))
-            {
-                Directory.Delete(directory, recursive: true);
-            }
+            var directory = dataDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DHub");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, "updater.log"), $"[{DateTimeOffset.Now:O}]\n{exception}\n\n");
         }
-        catch
-        {
-        }
-    }
-
-    private static void TryDeleteFile(string file)
-    {
-        try
-        {
-            if (File.Exists(file))
-            {
-                File.Delete(file);
-            }
-        }
-        catch
-        {
-        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 }

@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         ApplyColumnVisibility();
         ApplyFilter();
         InitializeTrayIcon();
+        _ = RefreshLinkStatusAsync(false);
 
         VersionTextBlock.Text = $"v{_updateService.CurrentVersion}";
 
@@ -172,6 +173,7 @@ public partial class MainWindow : Window
         _trayIcon?.Dispose();
         _trayIcon = null;
         _bookmarkService.Dispose();
+        _popupOwner.Dispose();
         _launcherBar?.Close();
     }
 
@@ -336,7 +338,7 @@ public partial class MainWindow : Window
         }
 
         CountTextBlock.Text = $"{_visibleItems.Count} 個のショートカット";
-        HealthStatusTextBlock.Text = $"未検出 {_store.Items.Count(x => x.IsBroken)} 件";
+        HealthStatusTextBlock.Text = $"未検出 {_store.Items.Count(x => x.IsBroken)} 件 / 未確認 {_store.Items.Count(x => !x.IsStatusKnown)} 件";
         RefreshSortHeader();
         RefreshTrayMenu();
     }
@@ -1087,24 +1089,22 @@ public partial class MainWindow : Window
         ShortcutRunner.OpenFolder(_store.StorageFolder);
     }
 
-    private void CheckLinksButton_Click(object sender, RoutedEventArgs e)
+    private bool _checkingLinks;
+    private async Task RefreshLinkStatusAsync(bool showResult)
     {
-        foreach (var item in _store.Items)
+        if (_checkingLinks) return;
+        _checkingLinks = true;
+        HealthStatusTextBlock.Text = "リンクをバックグラウンド確認中";
+        try
         {
-            item.RefreshStatus();
+            await Task.WhenAll(_store.Items.ToArray().Select(item => item.RefreshStatusAsync()));
+            if (_isExitRequested) return;
+            ApplyFilter();
+            if (showResult) ShowInfo($"確認済み {_store.Items.Count(x => x.IsStatusKnown)} 件 / 未検出 {_store.Items.Count(x => x.IsBroken)} 件");
         }
-
-        var brokenCount = _store.Items.Count(x => x.IsBroken);
-        ApplyFilter();
-
-        System.Windows.MessageBox.Show(
-            brokenCount == 0
-                ? "存在しないファイル・フォルダはありません。"
-                : $"存在しないファイル・フォルダが {brokenCount} 件あります。フィルタで「未検出のみ」を選ぶと確認できます。",
-            "DHub",
-            System.Windows.MessageBoxButton.OK,
-            brokenCount == 0 ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
+        finally { _checkingLinks = false; }
     }
+    private async void CheckLinksButton_Click(object sender, RoutedEventArgs e) => await RefreshLinkStatusAsync(true);
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1152,8 +1152,7 @@ public partial class MainWindow : Window
     private void TryLog(string category, string message, string detail, string level = "Info")
     {
         try { _store.AddLog(category, message, detail, level); }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException)
-        { System.Diagnostics.Trace.WriteLine(ex); }
+        catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
     }
 
     private void SaveLaunchHistory(string category, string message, string detail)
@@ -1166,7 +1165,7 @@ public partial class MainWindow : Window
     {
         _historySavePending = error is not null;
         if (error is not null)
-            ShowInfo("起動要求は送信済みですが、履歴を保存できませんでした。対象の再起動は不要です。\n管理メニューの「未保存の履歴を再保存」から保存だけを再試行できます。\n" + error.Message);
+            ShowInfo("起動要求は送信済みですが、履歴を保存できませんでした。対象の再起動は不要です。\n管理メニューの「未保存の履歴を再保存」で確認できます。読み取り専用になった場合は、現在の内容をエクスポートしてから復旧してください。\n" + error.Message);
     }
 
     private void PersistLaunchHistory(string category, string message, string detail)
@@ -1476,10 +1475,17 @@ public partial class MainWindow : Window
         }
     }
 
+    private void EnsureQuickSearchWindow()
+    {
+        if (_quickSearchWindow is not null) return;
+        _quickSearchWindow = new QuickSearchWindow();
+        _quickSearchWindow.Closed += (_, _) => _quickSearchWindow = null;
+    }
+
     private void ShowQuickSearch()
     {
-        _quickSearchWindow ??= new QuickSearchWindow();
-        _quickSearchWindow.LaunchRequested -= QuickSearchWindow_LaunchRequested;
+        EnsureQuickSearchWindow();
+        _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.ShowSearch(_store.Items.ToList());
     }
@@ -1550,14 +1556,11 @@ public partial class MainWindow : Window
         ApplyFilter();
     }
 
-    private void SidebarBrokenButton_Click(object sender, RoutedEventArgs e)
+    private async void SidebarBrokenButton_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var item in _store.Items)
-        {
-            item.RefreshStatus();
-        }
         FilterComboBox.SelectedItem = BrokenFilter;
         ApplyFilter();
+        await RefreshLinkStatusAsync(false);
     }
 
     private void ManualBackupButton_Click(object sender, RoutedEventArgs e)
@@ -2946,9 +2949,11 @@ public partial class MainWindow : Window
                 if (AskYesNo(message) != true) return;
             }
 
-            var downloadedZip = await _updateService.DownloadAppZipAsync(latest.DownloadUrl);
-            var updater = await _updateService.DownloadAndExtractUpdaterAsync(latest.UpdaterUrl);
-            _updateService.ReplaceCurrentExeAndRestartFromZip(downloadedZip, updater);
+            if (await _updateService.StartUpdateAsync(latest, _store.StorageFolder))
+            {
+                _isExitRequested = true;
+                WpfApplication.Current.Shutdown();
+            }
         }
         catch (Exception ex)
         {

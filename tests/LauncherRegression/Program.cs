@@ -50,7 +50,7 @@ try
     Check(url.FullPath.EndsWith("site.url"), "url file remains original file");
     Check(service.IsCurrent(snapshot, link), "current snapshot can launch");
     var next = await Stable(source);
-    Check(!service.IsCurrent(snapshot, link), "old generation cannot launch after refresh");
+    Check(service.IsCurrent(snapshot, link), "unchanged refresh preserves open snapshot selection");
     Check(service.IsCurrent(next, next.Entries.Single(x => x.Name == "sample.lnk")), "new generation can launch");
     source.HiddenPaths.Add("分類");
     var hidden = await Stable(source);

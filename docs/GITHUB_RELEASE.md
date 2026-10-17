@@ -1,68 +1,7 @@
-# DHub GitHub Release
+# DHub 正式配布
 
-## Repository
+現在の公開先 repository は [184649/DHub](https://github.com/184649/DHub) です。
 
-```text
-https://github.com/Chairman-bits/DHub.git
-```
+このブランチは検証用 preview です。既存の配布 ZIP は変更していません。プレビューの起動は [README](../README.md)、正式配布の package / hash / 更新手順は [UPDATE.md](UPDATE.md) を参照してください。
 
-## Build
-
-```bat
-Build.bat
-```
-
-Input only the version.
-
-```text
-Enter version (ex: 1.0.1): 1.0.1
-```
-
-## Generated files
-
-```text
-release/
-├─ DHub.exe
-└─ version.json
-
-github-release/
-├─ DHub.exe
-├─ version.json
-└─ RELEASE_NOTES.md
-```
-
-## Upload / commit
-
-Upload to GitHub Releases:
-
-```text
-github-release/DHub.exe
-```
-
-Release tag:
-
-```text
-v1.0.1
-```
-
-Commit to repository:
-
-```text
-release/version.json
-```
-
-## Update URL
-
-```text
-https://raw.githubusercontent.com/Chairman-bits/DHub/main/release/version.json
-```
-
-## version.json
-
-```json
-{
-  "version": "1.0.1",
-  "downloadUrl": "https://github.com/Chairman-bits/DHub/releases/download/v1.0.1/DHub.exe",
-  "releaseNotes": "DHub v1.0.1"
-}
-```
+旧版の exe 単体・hash なし manifest の手順は、この安全な updater には適用できません。正式配布は別途 Windows の更新 E2E を確認し、明示的に承認された時点で行います。

@@ -23,3 +23,5 @@ jobs:
         run: dotnet run --project tests/StorageRegression/StorageRegression.csproj -c Release
       - name: Launcher regression
         run: dotnet run --project tests/LauncherRegression/LauncherRegression.csproj -c Release
+      - name: Updater regression
+        run: dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release

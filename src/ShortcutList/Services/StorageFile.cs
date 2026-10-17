@@ -21,6 +21,8 @@ internal static class StorageFile
 
     public static string? Fingerprint(string path) => Exists(path) ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) : null;
 
+    public static string FingerprintText(string text) => Convert.ToHexString(SHA256.HashData(new UTF8Encoding(false).GetBytes(text)));
+
     public static void AtomicWrite<T>(string path, string json, Func<string, T> validate, bool backupValidatedDestination)
     {
         var directory = Path.GetDirectoryName(path) ?? throw new ArgumentException("保存先にフォルダーが必要です。", nameof(path));

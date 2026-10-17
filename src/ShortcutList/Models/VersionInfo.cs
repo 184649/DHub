@@ -10,5 +10,10 @@ public class VersionInfo
     // DHubUpdater.zip のURL
     public string UpdaterUrl { get; set; } = string.Empty;
 
+    public string DownloadSha256 { get; set; } = string.Empty;
+
+    public string UpdaterSha256 { get; set; } = string.Empty;
+
     public string ReleaseNotes { get; set; } = string.Empty;
 }
+

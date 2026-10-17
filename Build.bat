@@ -13,7 +13,7 @@ set RELEASE_DIR=%ROOT_DIR%release
 set EXE_NAME=DHub.exe
 set UPDATER_EXE_NAME=DHubUpdater.exe
 
-set REPO_OWNER=Chairman-bits
+set REPO_OWNER=184649
 set REPO_NAME=DHub
 set BRANCH_NAME=main
 
@@ -113,7 +113,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$updater='%UPDATER_ZIP_URL%';" ^
   "$notes='%NOTES_URL%';" ^
   "$release='%RELEASE_DIR%';" ^
-  "$obj=[ordered]@{ version=$version; downloadUrl=$app; updaterUrl=$updater; releaseNotes=$notes };" ^
+  "$appHash=(Get-FileHash -Algorithm SHA256 (Join-Path $release 'DHub.zip')).Hash.ToLowerInvariant();" ^
+  "$updaterHash=(Get-FileHash -Algorithm SHA256 (Join-Path $release 'DHubUpdater.zip')).Hash.ToLowerInvariant();" ^
+  "$obj=[ordered]@{ version=$version; downloadUrl=$app; updaterUrl=$updater; downloadSha256=$appHash; updaterSha256=$updaterHash; releaseNotes=$notes };" ^
   "$json=$obj | ConvertTo-Json -Depth 5;" ^
   "Set-Content -Path (Join-Path $release 'version.json') -Value $json -Encoding UTF8;" ^
   "$notesObj=[ordered]@{ version=$version; notes=@('DHub v' + $version) };" ^
@@ -137,3 +139,4 @@ echo   release\version.json
 echo   release\release-notes.json
 echo.
 pause
+

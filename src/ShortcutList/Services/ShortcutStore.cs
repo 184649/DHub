@@ -68,6 +68,9 @@ public class ShortcutStore
             _observedFiles = null;
             try
             {
+                // Establish the baseline before parsing, never after. Otherwise a file
+                // changed during Load could become the baseline for a stale future save.
+                _observedFiles = CaptureFiles(includeSplit: false);
                 AppData? data = null;
                 string mainError = string.Empty;
                 try
@@ -93,6 +96,7 @@ public class ShortcutStore
                     {
                         // Only a genuinely empty data directory is a new installation.
                         // A leftover backup/tmp/split is evidence of an interrupted or existing store.
+                        ObserveSplitFiles();
                         var split = ReadSeparatedSnapshot(null);
                         if (split is not null)
                         {
@@ -117,6 +121,7 @@ public class ShortcutStore
                 {
                     try
                     {
+                        ObserveSplitFiles();
                         _separatedCandidate = ReadSeparatedSnapshot(data);
                         if (_separatedCandidate is not null && !SameSnapshot(data, _separatedCandidate))
                         {
@@ -128,8 +133,8 @@ public class ShortcutStore
                         MarkConflict("分離ファイルの検証に失敗しました。統合側の内容を表示しています。保存を停止しました。\n" + ex.Message);
                     }
                 }
+                VerifyFilesUnchanged();
                 LoadFromData(data);
-                _observedFiles = CaptureFiles(data.Settings.EnableSeparatedDataFiles);
             }
             catch (Exception ex) when (IsStorageException(ex))
             {
@@ -212,7 +217,8 @@ public class ShortcutStore
             {
                 StorageFile.AtomicWrite(_storagePath, json, value => ReadData(value), currentIsValid);
                 if (data.Settings.EnableSeparatedDataFiles) SaveSeparatedDataFiles(data);
-                _observedFiles = CaptureFiles(data.Settings.EnableSeparatedDataFiles);
+                _observedFiles = ExpectedFiles(data, json);
+                VerifyFilesUnchanged();
                 _combinedCandidate = Clone(data);
                 _separatedCandidate = data.Settings.EnableSeparatedDataFiles ? Clone(data) : null;
                 _preserveBeforeSave = false;
@@ -248,16 +254,16 @@ public class ShortcutStore
         try
         {
             var proposed = Clone(CreateAppData());
+            ObserveSplitFiles();
             _separatedCandidate = ReadSeparatedSnapshot(proposed);
+            VerifyFilesUnchanged();
             if (_separatedCandidate is null || SameSnapshot(proposed, _separatedCandidate)) return;
             _combinedCandidate = proposed;
-            _observedFiles = CaptureFiles(true);
             MarkConflict("分離保存を有効にする前に、既存の分離ファイルとの違いを確認してください。");
         }
         catch (Exception ex) when (IsStorageException(ex))
         {
             _combinedCandidate = Clone(CreateAppData());
-            _observedFiles = CaptureFiles(true);
             MarkConflict("既存の分離ファイルを検証できません。保存前に統合側を使うか確認してください。\n" + ex.Message);
         }
         throw new InvalidOperationException(StorageConflictSummary);
@@ -331,6 +337,30 @@ public class ShortcutStore
         return paths.ToDictionary(path => path, StorageFile.Fingerprint, StringComparer.Ordinal);
     }
 
+    private void ObserveSplitFiles()
+    {
+        _observedFiles ??= CaptureFiles(includeSplit: false);
+        foreach (var path in SplitPaths())
+            if (!_observedFiles.ContainsKey(path)) _observedFiles.Add(path, StorageFile.Fingerprint(path));
+    }
+
+    private Dictionary<string, string?> ExpectedFiles(AppData data, string json)
+    {
+        var expected = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [_storagePath] = StorageFile.FingerprintText(json)
+        };
+        if (data.Settings.EnableSeparatedDataFiles)
+        {
+            expected[ShortcutsDataPath] = StorageFile.FingerprintText(JsonSerializer.Serialize(data.Items, _options));
+            expected[WorkspacesDataPath] = StorageFile.FingerprintText(JsonSerializer.Serialize(data.Workspaces, _options));
+            expected[CommandsDataPath] = StorageFile.FingerprintText(JsonSerializer.Serialize(data.Commands, _options));
+            expected[LogsDataPath] = StorageFile.FingerprintText(JsonSerializer.Serialize(data.Logs, _options));
+            expected[SettingsDataPath] = StorageFile.FingerprintText(JsonSerializer.Serialize(data.Settings, _options));
+        }
+        return expected;
+    }
+
     private void VerifyFilesUnchanged()
     {
         if (_observedFiles is null) return;
@@ -357,10 +387,11 @@ public class ShortcutStore
         VerifyFilesUnchanged();
         var original = Directory.EnumerateFiles(_storageFolder).ToDictionary(path => path, StorageFile.Fingerprint, StringComparer.Ordinal);
         var destination = Path.Combine(_storageFolder, "PreservedSnapshots", DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fffffff") + "_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(destination);
+        var filesDirectory = Path.Combine(destination, "files");
+        Directory.CreateDirectory(filesDirectory);
         foreach (var file in original)
         {
-            var preserved = Path.Combine(destination, Path.GetFileName(file.Key));
+            var preserved = Path.Combine(filesDirectory, Path.GetFileName(file.Key));
             File.Copy(file.Key, preserved, overwrite: false);
             if (!string.Equals(file.Value, StorageFile.Fingerprint(preserved), StringComparison.Ordinal))
                 throw new IOException("保全ファイルの検証に失敗しました。元ファイルは上書きしません。");
@@ -371,7 +402,7 @@ public class ShortcutStore
         VerifyFilesUnchanged();
         // Receipt makes the verified preservation inspectable without altering source files.
         StorageFile.AtomicWrite(Path.Combine(destination, "preservation-manifest.json"),
-            JsonSerializer.Serialize(original.ToDictionary(file => Path.GetFileName(file.Key), file => file.Value), _options),
+            JsonSerializer.Serialize(original.ToDictionary(file => Path.Combine("files", Path.GetFileName(file.Key)), file => file.Value), _options),
             json => JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? throw new InvalidDataException("保全記録が空です。"), false);
     }
 
@@ -398,7 +429,7 @@ public class ShortcutStore
     public void Remove(ShortcutItem item)
     {
         EnsureWritable();
-        Items.Remove(item);
+        if (!Items.Remove(item)) return;
         foreach (var workspace in Workspaces)
         {
             workspace.ShortcutIds.RemoveAll(id => string.Equals(id, item.Id, StringComparison.OrdinalIgnoreCase));
@@ -702,6 +733,8 @@ public class ShortcutStore
 
     public string CreateManualBackup()
     {
+        if (IsReadOnly && _combinedCandidate is null)
+            throw new InvalidOperationException("読み込めなかった状態を正常なバックアップとして保存できません。元ファイルを保全して復元してください。");
         var data = Clone(CreateAppData());
         Directory.CreateDirectory(BackupFolder);
         var path = Path.Combine(BackupFolder, $"shortcuts_manual_{DateTime.UtcNow:yyyyMMdd_HHmmss_fffffff}_{Guid.NewGuid():N}.json");

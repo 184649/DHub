@@ -38,9 +38,16 @@
                       Grid.Row="2"
                       BorderThickness="0"
                       MouseDoubleClick="ResultListView_MouseDoubleClick">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                        <Setter Property="Height" Value="Auto"/>
+                        <Setter Property="MinHeight" Value="78"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Height="54">
+                        <Grid Height="72" ToolTip="{Binding LaunchRecipeTooltip}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="28"/>
                                 <ColumnDefinition Width="34"/>
@@ -54,6 +61,7 @@
                             <StackPanel Grid.Column="3" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{Binding TargetPath}" Foreground="#5F6875" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding LaunchRecipeDisplay}" Foreground="#5F6875" FontSize="12" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
                                 <TextBlock Text="{Binding GroupDisplay}" Foreground="#5F6875" HorizontalAlignment="Right"/>
@@ -66,3 +74,4 @@
         </Grid>
     </Border>
 </Window>
+
