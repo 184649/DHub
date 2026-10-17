@@ -115,6 +115,7 @@ public sealed class BookmarkSourceService : IDisposable
             var truncated = false;
             var skipped = 0;
             var visited = 0;
+            var hiddenCount = 0;
             while (pending.Count > 0)
             {
                 if (state.Removed || _disposed) return new(id, revision, Array.Empty<BookmarkEntry>(), "連携解除済み", false);
@@ -128,7 +129,8 @@ public sealed class BookmarkSourceService : IDisposable
                     if ((child.Attributes & FileAttributes.ReparsePoint) != 0) { skipped++; continue; }
                     var relative = Path.GetRelativePath(path, child.FullName);
                     if (hidden.Any(h => string.Equals(relative, h, StringComparison.OrdinalIgnoreCase) ||
-                        relative.StartsWith(h + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))) continue;
+                        relative.StartsWith(h + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                    { hiddenCount++; continue; }
                     var isFolder = child is DirectoryInfo;
                     var fingerprint = $"{child.CreationTimeUtc.Ticks}:{child.LastWriteTimeUtc.Ticks}:{(child is FileInfo f ? f.Length : 0)}:{isFolder}";
                     entries.Add(new(id, relative, child.FullName, isFolder, fingerprint));
@@ -139,7 +141,9 @@ public sealed class BookmarkSourceService : IDisposable
                 if (entries.Count >= 10000 || visited > 20000) break;
             }
             var ordered = entries.OrderBy(x => x.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
-            var status = ordered.Length == 0 ? (hidden.Count > 0 ? "空、または全項目が非表示" : "空のフォルダー") : $"{ordered.Length} 件";
+            var status = ordered.Length > 0 ? $"{ordered.Length} 件" :
+                hiddenCount > 0 ? "表示対象はすべて非表示" :
+                skipped > 0 ? "表示できる項目がありません" : "空のフォルダー";
             if (truncated) status += "（上限到達。登録元を開くと全件に到達できます）";
             if (skipped > 0) status += $" / {skipped} 件のリンク・読取不可を除外";
             if (!state.WatcherHealthy) status += " / 監視不可: 元フォルダーから開いてください";

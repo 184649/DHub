@@ -2853,6 +2853,7 @@ public partial class MainWindow : Window
         export.Click += (_, _) => ExportLogsCsv();
         clear.Click += (_, _) =>
         {
+            if (!EnsureEditingAllowed()) return;
             if (Forms.MessageBox.Show("ログをすべて削除しますか？", "DHub", Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Question) != Forms.DialogResult.Yes) return;
             _store.ClearLogs();
             Refresh();

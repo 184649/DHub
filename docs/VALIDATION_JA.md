@@ -4,7 +4,7 @@ README の Windows + .NET 8 手順で、まず空の隔離した保存先を指�
 
 ## 自動検証の範囲
 
-2026-10-17 の Linux .NET 8.0.426 実行では、保存 85/85、ランチャー 23/23、更新器 50/50 が成功しました。production の C# ソースを test project に直接連結し、保存は一時フォルダーの実 IO、ランチャーは一時ファイルと監視、更新器は安全な合成パッケージ・置換失敗を検査しています。WPF / icon / Shell の境界は stub または注入した delegate です。実アプリの起動を検証した件数ではありません。
+2026-10-17 の Linux .NET 8.0.426 実行では、保存 85/85、ランチャー 24/24、更新器 50/50 が成功しました。production の C# ソースを test project に直接連結し、保存は一時フォルダーの実 IO、ランチャーは一時ファイルと監視、更新器は安全な合成パッケージ・置換失敗を検査しています。WPF / icon / Shell の境界は stub または注入した delegate です。実アプリの起動を検証した件数ではありません。
 
 Windows CI は WPF 本体・Updater の clean build 後に同じ 3 スイートを実行します。[実行履歴](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) で対象 commit の結論を確認してください。初回 CI の Thickness 引数エラーは修正しました。
 

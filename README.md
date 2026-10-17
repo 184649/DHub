@@ -39,7 +39,7 @@ dotnet run --project tests/LauncherRegression/LauncherRegression.csproj -c Relea
 dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release
 ```
 
-実ソースを使う回帰テストは保存 85 件、ランチャー 23 件、更新器 50 件です。Windows ビルドと同じ 3 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
+実ソースを使う回帰テストは保存 85 件、ランチャー 24 件、更新器 50 件です。Windows ビルドと同じ 3 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
 
 - [起動後の確認・制限・回復手順](docs/VALIDATION_JA.md)
 - [全改善項目の対応台帳](docs/IMPROVEMENT_LEDGER_JA.md)

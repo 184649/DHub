@@ -38,6 +38,10 @@ try
     Check(!service.GetSnapshot(source.Id).CanLaunch, "unloaded source is non-launchable");
     var empty = await Stable(source);
     Check(empty.CanLaunch && empty.Entries.Count == 0 && empty.Status.Contains("空"), "empty source distinct from offline");
+    source.HiddenPaths.Add("previously-hidden.txt");
+    var emptyWithOldHidden = await Stable(source);
+    Check(emptyWithOldHidden.Status.Contains("空") && !emptyWithOldHidden.Status.Contains("非表示"), "stale hidden rule does not mislabel an empty source");
+    source.HiddenPaths.Clear();
     var folder = Path.Combine(root, "分類"); Directory.CreateDirectory(folder);
     File.WriteAllText(Path.Combine(root, "sample.lnk"), "synthetic, never launched");
     File.WriteAllText(Path.Combine(folder, "site.url"), "[InternetShortcut]\nURL=https://example.invalid/Case/");
@@ -57,7 +61,7 @@ try
     Check(hidden.Entries.Count == 1 && File.Exists(url.FullPath), "hiding classification is non-destructive and hides descendants");
     source.HiddenPaths.Add("sample.lnk");
     var allHidden = await Stable(source);
-    Check(allHidden.Entries.Count == 0 && allHidden.Status.Contains("非表示"), "all hidden status is explicit");
+    Check(allHidden.Entries.Count == 0 && allHidden.Status.Contains("非表示") && !allHidden.Status.Contains("空"), "all hidden status is explicit");
     source.HiddenPaths.Clear();
     var beforeRemove = await Stable(source);
     var savedLink = beforeRemove.Entries.Single(x => x.Name == "sample.lnk");
