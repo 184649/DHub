@@ -9,12 +9,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DHub</AssemblyName>
     <RootNamespace>ShortcutList</RootNamespace>
-    <Version>1.1.1-preview.1</Version>
-    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <Version>1.1.2-preview.1</Version>
+    <AssemblyVersion>1.1.2.0</AssemblyVersion>
         <ApplicationIcon>Assets\DHub.ico</ApplicationIcon>
     <Product>DHub</Product>
     <Description>DHub shortcut launcher</Description>
-    <FileVersion>1.1.1.0</FileVersion>
+    <FileVersion>1.1.2.0</FileVersion>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

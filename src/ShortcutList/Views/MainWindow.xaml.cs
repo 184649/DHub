@@ -89,8 +89,8 @@ public partial class MainWindow : Window
 
         VersionTextBlock.Text = $"v{_updateService.CurrentVersion}" + (_updateService.IsMsiInstalled ? " / MSI管理" : string.Empty);
 
-        // 初回起動時はウィンドウを一切表示しないため、Loaded ではなく
-        // コンストラクター完了後にバックグラウンドで自動更新確認を実行します。
+        // 常駐起動でも更新確認できるよう、Loaded ではなくコンストラクター完了後に実行。
+        // 新規profileは一覧起動。保存済みの概要表示設定は明示的に変更するまで維持します。
         _ = Dispatcher.BeginInvoke(new Action(() =>
         {
             if (_store.Settings.CheckUpdateOnStartup)
@@ -340,6 +340,8 @@ public partial class MainWindow : Window
         }
 
         CountTextBlock.Text = $"{_visibleItems.Count} 個のショートカット";
+        BookmarkWelcomePanel.Visibility = _store.Items.Count == 0 && !_store.IsReadOnly
+            ? Visibility.Visible : Visibility.Collapsed;
         HealthStatusTextBlock.Text = $"未検出 {_store.Items.Count(x => x.IsBroken)} 件 / 未確認 {_store.Items.Count(x => !x.IsStatusKnown)} 件";
         RefreshSortHeader();
         RefreshTrayMenu();
@@ -771,7 +773,8 @@ public partial class MainWindow : Window
     {
         var menu = new ContextMenu();
 
-        AddMenuItem(menu, "ホーム", ShowHomeDashboard);
+        AddMenuItem(menu, "作業の概要（任意）", ShowHomeDashboard);
+        AddMenuItem(menu, "サンプル3件を追加", AddSampleBookmarks);
         AddMenuItem(menu, "統合検索 / コマンドパレット", ShowCommandPalette);
         AddMenuItem(menu, "コマンドショートカット管理", ShowCommandManager);
         AddMenuItem(menu, "操作ログ", ShowOperationLogWindow);
@@ -902,7 +905,7 @@ public partial class MainWindow : Window
         }
 
         if (System.Windows.MessageBox.Show(
-                $"「{SelectedItem.Name}」を削除しますか？",
+                $"「{SelectedItem.Name}」の登録を削除しますか？\n元のファイル・フォルダーは削除しません。作業セットからもこの登録を外します。",
                 "DHub",
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
@@ -910,7 +913,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        _store.Remove(SelectedItem);
+        try { _store.Remove(SelectedItem); }
+        catch (Exception ex)
+        {
+            ApplyFilter();
+            ShowInfo("登録の削除を保存できませんでした。画面の登録と作業セットの参照は戻しました。\nディスクに一部保存された可能性があるため、「保存データの確認 / 復旧」で確認してください。\n" + ex.Message);
+            return;
+        }
         RefreshFilterItemsKeepSelection();
         ApplyFilter();
     }
@@ -1846,7 +1855,7 @@ public partial class MainWindow : Window
         var checkUpdate = new Forms.CheckBox { Text = "起動時に更新確認", Left = 16, Top = 52, Width = 300, Checked = _store.Settings.CheckUpdateOnStartup };
         var hotkeys = new Forms.CheckBox { Text = "グローバルホットキーを有効化", Left = 16, Top = 84, Width = 300, Checked = _store.Settings.EnableGlobalHotkeys };
         var realIcons = new Forms.CheckBox { Text = "実ファイルのアイコン表示を有効化", Left = 16, Top = 116, Width = 300, Checked = _store.Settings.UseRealFileIcons };
-        var showHome = new Forms.CheckBox { Text = "起動時にホームを表示", Left = 16, Top = 148, Width = 300, Checked = _store.Settings.ShowHomeOnStartup };
+        var showHome = new Forms.CheckBox { Text = "起動時に作業の概要を表示（任意）", Left = 16, Top = 148, Width = 400, Checked = _store.Settings.ShowHomeOnStartup };
         var operationLog = new Forms.CheckBox { Text = "起動ログ・操作ログを保存", Left = 16, Top = 180, Width = 300, Checked = _store.Settings.EnableOperationLog };
         var separatedData = new Forms.CheckBox { Text = "設定・データを分離ファイルにも保存", Left = 16, Top = 212, Width = 360, Checked = _store.Settings.EnableSeparatedDataFiles };
         var updateLabel = new Forms.Label { Text = "更新確認URL", Left = 16, Top = 248, Width = 120 };
@@ -2391,9 +2400,10 @@ public partial class MainWindow : Window
     {
         using var form = new Forms.Form
         {
-            Text = "DHub ホーム - 今日の作業ダッシュボード",
+            Text = "DHub - 作業の概要（任意）",
             Width = 900,
-            Height = 620,
+            Height = 710,
+            AutoScroll = true,
             StartPosition = Forms.FormStartPosition.CenterScreen,
             MinimizeBox = false,
             MaximizeBox = false
@@ -2401,7 +2411,7 @@ public partial class MainWindow : Window
 
         var title = new Forms.Label
         {
-            Text = "今日の作業ダッシュボード",
+            Text = "作業の概要（任意）",
             Left = 16,
             Top = 14,
             Width = 500,
@@ -2413,36 +2423,45 @@ public partial class MainWindow : Window
         {
             Text = $"お気に入り {_store.Items.Count(x => x.IsFavorite)} 件 / 最近使った {_store.Items.Count(x => x.LastLaunchedAt.HasValue)} 件 / ワークスペース {_store.Workspaces.Count} 件 / コマンド {_store.Commands.Count} 件 / 未検出 {_store.Items.Count(x => x.IsBroken)} 件",
             Left = 16,
-            Top = 48,
+            Top = 118,
             Width = 840,
             Height = 24
         };
 
-        var favoriteList = CreateDashboardList("お気に入り", 16, 84);
+        var explanation = new Forms.Label { Left = 16, Top = 48, Width = 840, Height = 30,
+            Text = "日常の入口はブックマーク一覧と固定バーです。この概要は、履歴や作業セットをまとめて見るときだけ使います。" };
+        var bookmarks = new Forms.Button { Left = 16, Top = 82, Width = 410, Height = 32,
+            Text = "ブックマーク一覧へ（次回も一覧から）", BackColor = Drawing.Color.FromArgb(37, 99, 235),
+            ForeColor = Drawing.Color.White, FlatStyle = Forms.FlatStyle.Flat };
+        bookmarks.Click += (_, _) => { if (UseBookmarkListOnStartup()) { form.Close(); ShowMainWindowFromTray(); } };
+        var samples = new Forms.Button { Left = 438, Top = 82, Width = 220, Height = 32, Text = "サンプル3件を追加" };
+        samples.Click += (_, _) => { form.Close(); ShowMainWindowFromTray(); AddSampleBookmarks(); };
+
+        var favoriteList = CreateDashboardList("お気に入り", 16, 150);
         foreach (var item in _store.Items.Where(x => x.IsFavorite).OrderBy(x => x.SortOrder).ThenBy(x => x.Name).Take(12))
         {
             favoriteList.Items.Add(new DashboardEntry(item.Name, item.TargetPath, () => LaunchItem(item)));
         }
 
-        var recentList = CreateDashboardList("最近使った", 306, 84);
+        var recentList = CreateDashboardList("最近使った", 306, 150);
         foreach (var item in _store.Items.Where(x => x.LastLaunchedAt.HasValue).OrderByDescending(x => x.LastLaunchedAt).Take(12))
         {
             recentList.Items.Add(new DashboardEntry(item.Name, item.LastLaunchedDisplay, () => LaunchItem(item)));
         }
 
-        var workspaceList = CreateDashboardList("ワークスペース", 596, 84);
+        var workspaceList = CreateDashboardList("ワークスペース", 596, 150);
         foreach (var workspace in _store.Workspaces.OrderByDescending(x => x.LastLaunchedAt ?? DateTime.MinValue).ThenBy(x => x.Name).Take(12))
         {
             workspaceList.Items.Add(new DashboardEntry(workspace.Name, workspace.Description, () => LaunchWorkspace(workspace)));
         }
 
-        var commandList = CreateDashboardList("コマンド", 16, 346);
+        var commandList = CreateDashboardList("コマンド", 16, 412);
         foreach (var command in _store.Commands.OrderByDescending(x => x.IsFavorite).ThenByDescending(x => x.LastRunAt ?? DateTime.MinValue).ThenBy(x => x.Name).Take(12))
         {
             commandList.Items.Add(new DashboardEntry(command.Name, command.Command, () => RunCommand(command)));
         }
 
-        var alertList = CreateDashboardList("警告・最近のログ", 306, 346);
+        var alertList = CreateDashboardList("警告・最近のログ", 306, 412);
         foreach (var item in _store.Items.Where(x => x.IsBroken).Take(6))
         {
             alertList.Items.Add(new DashboardEntry("未検出: " + item.Name, item.TargetPath, () => ShortcutListView.SelectedItem = item));
@@ -2452,7 +2471,7 @@ public partial class MainWindow : Window
             alertList.Items.Add(new DashboardEntry(log.Message, log.CreatedAtDisplay, () => { }));
         }
 
-        var actionPanel = new Forms.GroupBox { Text = "すぐ使う", Left = 596, Top = 346, Width = 270, Height = 190 };
+        var actionPanel = new Forms.GroupBox { Text = "管理・補助機能", Left = 596, Top = 412, Width = 270, Height = 190 };
         var palette = new Forms.Button { Text = "統合検索 / コマンドパレット", Left = 18, Top = 28, Width = 220, Height = 32 };
         var add = new Forms.Button { Text = "ショートカット追加", Left = 18, Top = 68, Width = 220, Height = 32 };
         var commands = new Forms.Button { Text = "コマンド管理", Left = 18, Top = 108, Width = 220, Height = 32 };
@@ -2469,7 +2488,7 @@ public partial class MainWindow : Window
         commandList.DoubleClick += (_, _) => ExecuteDashboardEntry(commandList);
         alertList.DoubleClick += (_, _) => ExecuteDashboardEntry(alertList);
 
-        form.Controls.AddRange(new Forms.Control[] { title, summary, favoriteList, recentList, workspaceList, commandList, alertList, actionPanel });
+        form.Controls.AddRange(new Forms.Control[] { title, explanation, bookmarks, samples, summary, favoriteList, recentList, workspaceList, commandList, alertList, actionPanel });
         form.ShowDialog();
     }
 

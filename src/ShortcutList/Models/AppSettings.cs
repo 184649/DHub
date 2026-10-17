@@ -37,7 +37,8 @@ public class AppSettings
     public bool ShowRestoreMessageAfterRecovery { get; set; } = true;
     public bool UseRealFileIcons { get; set; } = true;
 
-    public bool ShowHomeOnStartup { get; set; } = true;
+    // New profiles open the bookmark list. An explicit stored preference is still honored.
+    public bool ShowHomeOnStartup { get; set; } = false;
     public bool EnableOperationLog { get; set; } = true;
     public int OperationLogKeepCount { get; set; } = 1000;
     public bool EnableSeparatedDataFiles { get; set; } = true;

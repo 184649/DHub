@@ -462,12 +462,62 @@ public class ShortcutStore
     public void Remove(ShortcutItem item)
     {
         EnsureWritable();
-        if (!Items.Remove(item)) return;
-        foreach (var workspace in Workspaces)
+        var index = Items.IndexOf(item);
+        if (index < 0) return;
+        var references = Workspaces.Select(x => (Workspace: x, Ids: x.ShortcutIds.ToArray())).ToArray();
+        try
         {
-            workspace.ShortcutIds.RemoveAll(id => string.Equals(id, item.Id, StringComparison.OrdinalIgnoreCase));
+            Items.RemoveAt(index);
+            foreach (var workspace in Workspaces)
+                workspace.ShortcutIds.RemoveAll(id => string.Equals(id, item.Id, StringComparison.OrdinalIgnoreCase));
+            Save();
         }
-        Save();
+        catch
+        {
+            // Preserve object/list identity for open menus and restore references together.
+            Items.Insert(index, item);
+            foreach (var entry in references)
+            {
+                entry.Workspace.ShortcutIds.Clear();
+                entry.Workspace.ShortcutIds.AddRange(entry.Ids);
+            }
+            throw; // Disk state can be uncertain; Save already protects subsequent writes.
+        }
+    }
+
+    public IReadOnlyList<ShortcutItem> AddSampleBookmarks()
+    {
+        lock (_saveLock)
+        {
+            EnsureWritable();
+            VerifyFilesUnchanged();
+            StorageIntegrity.Validate(CreateAppData());
+            var additions = SampleBookmarks.Catalog(StorageFolder).Where(sample =>
+                !Items.Any(item => string.Equals(item.Id, sample.Id, StringComparison.OrdinalIgnoreCase)) &&
+                !Items.Any(item => SampleBookmarks.SameRecipe(item, sample))).ToArray();
+            var lastOrder = Items.Select(x => x.SortOrder).DefaultIfEmpty(-1).Max();
+            if ((long)lastOrder + additions.Length > int.MaxValue)
+                throw new InvalidOperationException("並び順の上限に達しています。既存の並び順を変えずにサンプルを追加できません。");
+            for (var i = 0; i < additions.Length; i++) additions[i].SortOrder = lastOrder + i + 1;
+            var candidate = CreateAppData();
+            candidate.Items.AddRange(additions);
+            StorageIntegrity.Validate(candidate);
+            SampleBookmarks.PrepareFiles(StorageFolder);
+            if (additions.Length == 0) return additions;
+            try
+            {
+                foreach (var item in additions) Items.Add(item);
+                Save();
+                return additions;
+            }
+            catch
+            {
+                foreach (var item in additions) Items.Remove(item);
+                // Keep dedicated sample files: a partial multi-file save may already reference them.
+                // They are harmless text/folders and can be reused on a later explicit retry.
+                throw;
+            }
+        }
     }
 
     public void AddWorkspace(WorkspaceItem workspace)

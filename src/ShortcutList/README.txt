@@ -45,3 +45,14 @@ v1.0.3 additional stability/management features:
 - 起動ログ・操作ログ
 - 設定・データの分離保存（shortcuts.data.json / workspaces.data.json / commands.data.json / logs.data.json / settings.data.json）
 - 統合検索対象: ショートカット、ワークスペース、コマンド、操作、メモ、ログ
+
+
+1.1.2-preview.1
+--------------
+- 新規profileはブックマーク一覧から起動します。
+- 既存profileで概要が出る場合は「ブックマーク一覧へ（次回も一覧から）」を選びます。
+- 「サンプル3件を追加」でメモ・作業フォルダー・Microsoft公式Windowsヘルプを試せます。
+- 追加は確認操作時だけ。既存登録を置換せず、重複追加や既存テキストの上書きをしません。
+- 固定バーを今回だけ表示します。ボタンをクリックするまでファイルやURLは開きません。
+- 一覧で選んで「削除」は登録のみ。実ファイルとフォルダーは残ります。
+- 詳細は docs/SAMPLES.md と docs/LOCAL_CHECK.md を参照してください。

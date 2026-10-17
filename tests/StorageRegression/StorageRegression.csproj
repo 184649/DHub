@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/ShortcutList/Services/ShortcutStore.cs" Link="Production/ShortcutStore.cs" />
+    <Compile Include="../../src/ShortcutList/Services/SampleBookmarks.cs" Link="Production/SampleBookmarks.cs" />
     <Compile Include="../../src/ShortcutList/Services/StorageFile.cs" Link="Production/StorageFile.cs" />
     <Compile Include="../../src/ShortcutList/Services/StorageSnapshotDiff.cs" Link="Production/StorageSnapshotDiff.cs" />
     <Compile Include="../../src/ShortcutList/Services/StorageIntegrity.cs" Link="Production/StorageIntegrity.cs" />

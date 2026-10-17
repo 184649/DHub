@@ -60,7 +60,7 @@ try {
     Write-Host 'MSI と .NET 同梱のプレビューを作成しています。MSI の実行やアプリの起動は行いません。'
     $buildParameters = @{
         TargetFramework = 'net10.0-windows'
-        PackageVersion = '1.1.1'
+        PackageVersion = '1.1.2'
         OutputDirectory = $buildDirectory
         WixBin = $resolvedWix
     }
@@ -109,7 +109,10 @@ $app プレビュー: ローカル動作確認
 1. Launch-Preview.cmd をダブルクリックすると、インストールせず起動できます。
    通常版の設定とは別の preview-profile を使用します。
    初期画面が出ない場合は、タスクトレイの隠れているアイコンも確認してください。
-2. sample-files にあるテストファイルで検索・登録・再起動後の保存を確認してください。
+2. 概要が出たら「ブックマーク一覧へ（次回も一覧から）」を選びます。
+   「サンプル3件を追加」で実ファイル・フォルダー・公式URLを固定バーから試せます。
+   自分でボタンをクリックするまで、ファイルやWebサイトは開きません。
+   不要な登録は一覧で選んで「削除」。元ファイルは残ります。
 3. 終了はアプリのトレイメニューから行います。ウィンドウの×だけでは常駐する場合があります。
 
 MSI (手動確認用):

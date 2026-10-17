@@ -147,7 +147,8 @@ public partial class MainWindow
         menu.Items.Add(more);
         var manage = new Forms.ToolStripMenuItem("管理");
         AddTrayAction(manage.DropDownItems, "管理画面を開く", ShowMainWindowFromTray);
-        AddTrayAction(manage.DropDownItems, "ホーム", ShowHomeDashboard);
+        AddTrayAction(manage.DropDownItems, "作業の概要（任意）", ShowHomeDashboard);
+        AddTrayAction(manage.DropDownItems, "サンプル3件を追加", AddSampleBookmarks);
         AddTrayAction(manage.DropDownItems, "追加", OpenAddDialog);
         AddTrayAction(manage.DropDownItems, "登録元フォルダーの管理", ShowBookmarkSourceManager);
         AddTrayAction(manage.DropDownItems, "登録元を再読込", () => _ = RefreshBookmarkSourcesAsync());

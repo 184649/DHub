@@ -36,7 +36,8 @@
 | updater の終了・置換・回復 | staging-ready / proceed の原子的合図、正確な PID を待機し kill しない。backup + File.Replace、部分失敗 rollback、BOM manifest 対応。 |
 | 更新後の profile 消失 | `--data-dir` を updater 経由で引き継ぐ。準備失敗時はアプリを閉じない。 |
 | プレビューの通常版への誤更新 | 別バージョン・保存先・preview guard。正式配布時だけ明示 version を設定。 |
-| 起動と確認手順 | README と検証書、SDK 8 固定、単一 Windows job のブランチ限定 CI。 |
+| サンプルと最初の入口 | 明示追加で実ファイル・専用フォルダー・公式URLを固定。安定ID＋同一recipeで重複防止。既存編集を保持。新規は一覧起動、既存概要設定は1操作で変更。保存・削除rollbackを回帰試験。 |
+| 起動と確認手順 | README と検証書、既設 SDK 10 を選択、単一 Windows job のブランチ限定 CI。 |
 
 ## 保留・残る受入確認
 

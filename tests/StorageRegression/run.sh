@@ -19,7 +19,7 @@ repo,root,build,sdk=map(Path,sys.argv[1:5]); ref,framework,runtime=sys.argv[5:]
 args=['-nologo','-target:exe','-nullable:enable','-warnaserror','-out:'+str(build/'StorageRegression.dll')]
 args+=['-r:'+str(p) for p in sorted((sdk/'packs/Microsoft.NETCore.App.Ref'/ref/'ref'/framework).glob('*.dll'))]
 args += [str(p) for p in sorted(root.glob('*.cs'))]
-args += [str(repo/'src/ShortcutList/Services'/p) for p in ['ShortcutStore.cs','StorageFile.cs','StorageIntegrity.cs','StorageSnapshotDiff.cs','ShortcutDetector.cs','ShortcutRunner.cs']]
+args += [str(repo/'src/ShortcutList/Services'/p) for p in ['ShortcutStore.cs','SampleBookmarks.cs','StorageFile.cs','StorageIntegrity.cs','StorageSnapshotDiff.cs','ShortcutDetector.cs','ShortcutRunner.cs']]
 args += [str(repo/'src/ShortcutList/Models'/p) for p in ['AppData.cs','AppSettings.cs','ShortcutItem.cs','WorkspaceItem.cs','CommandItem.cs','OperationLogItem.cs','ShortcutType.cs','BookmarkSource.cs']]
 (build/'compile.rsp').write_text('\n'.join('"'+arg+'"' for arg in args)+'\n')
 (build/'StorageRegression.runtimeconfig.json').write_text(json.dumps({'runtimeOptions':{'tfm':framework,'framework':{'name':'Microsoft.NETCore.App','version':runtime}}}))

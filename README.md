@@ -1,6 +1,6 @@
 # DHub
 
-Windows 向けのファイル・フォルダー・URL ランチャーです。このブランチは **1.1.0-preview.1**。既存登録の直接起動、フォルダー参照、保存回復と安全な更新処理を改善しています。
+Windows 向けのファイル・フォルダー・URL ランチャーです。このブランチは **1.1.2-preview.1**。既存登録の直接起動、フォルダー参照、保存回復と安全な更新処理を改善しています。
 
 ## プレビューを起動する
 
@@ -23,6 +23,14 @@ dotnet run --project src/ShortcutList/ShortcutList.csproj -c Release -- --data-d
 - 既存の `DHub.zip` / `release/` はこのソース変更から作った配布物ではありません。プレビューは上記のソースからビルドしてください。
 - プレビューから通常版への自動更新は停止しています。通常版の exe だけでプレビューの DLL を上書きしないためです。`Build.bat` は正式配布用で、この検証手順では実行しません。
 
+## まずサンプルで試す
+
+新規起動はブックマーク一覧です。既存設定で概要が開く場合は、青い **「ブックマーク一覧へ（次回も一覧から）」** で切り替えられます。作業の概要は履歴・作業セットをまとめて見る任意の補助画面として、設定メニューに残しています。
+
+一覧上部の **「サンプル3件を追加」** で、使い方メモ（実テキスト）、作業フォルダー（実フォルダー）、Microsoft公式Windowsヘルプ（URL）を追加できます。確認後に新規サンプルだけをお気に入りにし、固定バーを今回の起動中だけ表示します。ファイルやURLは自分でクリックするまで開きません。
+
+既存登録を置き換えず、再追加で重複しません。不要な登録は一覧から削除できます。実ファイルや自分で書き加えた内容は残ります。詳しくは [サンプルと起動画面](docs/SAMPLES.md)、ZIPからのビルドは [自分のPCで動作確認](docs/LOCAL_CHECK.md) を参照してください。
+
 ## 日常の入口
 
 トレイアイコンの左クリックで、お気に入りを直接選べます。固定順は起動しても変わりません。多い場合は「全件」へ進みます。右クリックや管理メニューから従来の管理画面を開けます。
@@ -39,7 +47,7 @@ dotnet run --project tests/LauncherRegression/LauncherRegression.csproj -c Relea
 dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release
 ```
 
-実ソースを使う回帰テストは保存 85 件、ランチャー 24 件、更新器 50 件です。Windows ビルドと同じ 3 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
+実ソースを使う回帰テストは保存・サンプル 114 件、ランチャー 55 件です。更新器はLinux確認で59件合格・Windows専用5件スキップです。Windows ビルドと同じ 3 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
 
 - [起動後の確認・制限・回復手順](docs/VALIDATION_JA.md)
 - [全改善項目の対応台帳](docs/IMPROVEMENT_LEDGER_JA.md)
