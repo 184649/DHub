@@ -48,8 +48,8 @@ class HiddenLauncherContract(unittest.TestCase):
             for forbidden in ['Registry.', 'Process.Start', 'SHAppBarMessage', 'SetWindowsHookEx']:
                 self.assertNotIn(forbidden, source)
     def test_fixture_versions_do_not_follow_product_bump(self):
-        self.assertIn("$PackageVersion = '1.1.3'", read('packaging/Build-Installer.ps1'))
-        self.assertIn("PackageVersion = '1.1.3'", read('packaging/Build-Local.ps1'))
+        self.assertIn("$PackageVersion = '1.1.4'", read('packaging/Build-Installer.ps1'))
+        self.assertIn("PackageVersion = '1.1.4'", read('packaging/Build-Local.ps1'))
         self.assertIn("-PackageVersion '1.1.2'", read('packaging/Test-Installer.ps1'))
 
 if __name__ == '__main__': unittest.main(verbosity=2)

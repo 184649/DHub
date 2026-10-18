@@ -328,6 +328,7 @@ public partial class MainWindow : Window
         HealthStatusTextBlock.Text = $"未検出 {_store.Items.Count(x => x.IsBroken)} 件 / 未確認 {_store.Items.Count(x => !x.IsStatusKnown)} 件";
         RefreshSortHeader();
         RefreshTrayMenu();
+        RefreshQuickEntriesIfVisible();
     }
 
     private IEnumerable<ShortcutItem> ApplySearchScoreSort(IEnumerable<ShortcutItem> items, IReadOnlyList<string> words)
@@ -1474,31 +1475,6 @@ public partial class MainWindow : Window
             WpfClipboard.SetText(SelectedItem.TargetPath);
             e.Handled = true;
         }
-    }
-
-    private void EnsureQuickSearchWindow()
-    {
-        if (_quickSearchWindow is not null) return;
-        _quickSearchWindow = new QuickSearchWindow();
-        _quickSearchWindow.Closed += (_, _) => _quickSearchWindow = null;
-        _quickSearchWindow.SettingsRequested += (_, _) => ShowHotkeySettings();
-        _quickSearchWindow.ManagementRequested += (_, _) => ShowMainWindowFromTray();
-        _quickSearchWindow.ExitRequested += (_, _) => RequestExit();
-    }
-
-    private void ShowQuickSearch()
-    {
-        if (_isExitRequested || ActivateExistingDialog()) return;
-        _notifyIcon?.ContextMenuStrip?.Close();
-        EnsureQuickSearchWindow();
-        _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
-        _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;
-        _quickSearchWindow.ShowSearch(_store.Items.ToList());
-    }
-
-    private void QuickSearchWindow_LaunchRequested(object? sender, ShortcutItem item)
-    {
-        LaunchItem(item);
     }
 
     private static Drawing.Icon LoadApplicationIcon()

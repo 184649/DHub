@@ -1,6 +1,12 @@
 # DHub
 
-Windows 向けのファイル・フォルダー・URL ランチャーです。このブランチは **1.1.3-preview.1**。既存登録の直接起動、フォルダー参照、保存回復と安全な更新処理を改善しています。
+Windows 向けのファイル・フォルダー・URL ランチャーです。このブランチは **1.1.4-preview.1**。既存登録の直接起動、フォルダー参照、保存回復と安全な更新処理を改善しています。
+
+## この試作で変えたこと
+
+呼出→目的のフォルダー・ファイル・URLを選ぶ→直接開く、という一画面に絞りました。直接登録と連携フォルダーを同じ一覧で検索し、名前一致を優先します。一覧へのドロップやパス貼付で追加できます。任意の組合せも同じ一覧から明示的にまとめて開けます。
+
+使いたさ・時短は未検証です。[試作の範囲・制限・受入確認](docs/DIRECT_LAUNCH_PROTOTYPE.md)を参照してください。
 
 ## プレビューを起動する
 
@@ -9,12 +15,12 @@ Windows 10/11 と [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.
 PowerShell で実行します。
 
 ```powershell
-git clone --branch codex/dhub-reliability-launcher-20261017 https://github.com/184649/DHub.git DHub-preview
+git clone --branch dot/dhub-unified-bookmarks-20261018 https://github.com/184649/DHub.git DHub-preview
 cd DHub-preview
 # リポジトリに残る過去のビルド生成物だけを除き、新しいソースからビルドします。
 Get-ChildItem src -Directory -Recurse | Where-Object { $_.Name -in @('bin', 'obj') } | Sort-Object FullName -Descending | Remove-Item -Recurse -Force
 dotnet build DHub.sln -c Release --no-incremental
-dotnet run --project src/ShortcutList/ShortcutList.csproj -c Release -- --data-dir "$env:TEMP\DHub-Preview-QA"
+dotnet run --project src/ShortcutList/ShortcutList.csproj -c Release -- --data-dir "$env:TEMP\DHub-1.1.4-QA"
 ```
 
 - 最初は空の検証用フォルダーで試してください。既存データを試す場合も、元の保存フォルダー一式を別の検証用フォルダーへコピーして指定します。
@@ -23,7 +29,7 @@ dotnet run --project src/ShortcutList/ShortcutList.csproj -c Release -- --data-d
 - 既存の `DHub.zip` / `release/` はこのソース変更から作った配布物ではありません。プレビューは上記のソースからビルドしてください。
 - プレビューから通常版への自動更新は停止しています。通常版の exe だけでプレビューの DLL を上書きしないためです。`Build.bat` は正式配布用で、この検証手順では実行しません。
 
-## 日常の入口（1.1.3-preview.1）
+## 日常の入口（1.1.4-preview.1）
 
 通常起動では画面・固定バー・タスクバーのボタンを表示せず、通知領域のトレイアイコンだけで待機します。
 
@@ -58,9 +64,10 @@ dotnet run --project tests/StorageRegression/StorageRegression.csproj -c Release
 dotnet run --project tests/LauncherRegression/LauncherRegression.csproj -c Release
 dotnet run --project tests/UpdaterRegression/UpdaterRegression.csproj -c Release
 dotnet run --project tests/HiddenLauncherRegression/HiddenLauncherRegression.csproj -c Release
+dotnet run --project tests/UnifiedLauncherRegression/UnifiedLauncherRegression.csproj -c Release
 ```
 
-実ソースを使う回帰テストは保存・サンプル・設定維持 116 件、ランチャー 55 件です。更新器はLinux確認で59件合格・Windows専用5件スキップです。Windows ビルドと同じ 4 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Acodex%2Fdhub-reliability-launcher-20261017) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
+実ソースを使う回帰テストは保存・サンプル・設定維持 116 件、ランチャー 55 件です。更新器はLinux確認で59件合格・Windows専用5件スキップです。Windows ビルドと同じ 5 スイートを実行する [ブランチ限定 CI](https://github.com/184649/DHub/actions?query=branch%3Adot%2Fdhub-unified-bookmarks-20261018) もあります。GUI 操作・実 Shell 起動・DPI/複数画面は自動テストの合格に含めません。
 
 - [起動後の確認・制限・回復手順](docs/VALIDATION_JA.md)
 - [全改善項目の対応台帳](docs/IMPROVEMENT_LEDGER_JA.md)

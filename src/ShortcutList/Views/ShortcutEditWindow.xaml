@@ -139,7 +139,7 @@
                                  ToolTip="例: GitHub, 開発, 資料"/>
 
                         <Expander Header="詳細設定"
-                                  IsExpanded="True"
+                                  IsExpanded="False"
                                   Margin="0,0,0,12">
                             <StackPanel Margin="0,10,0,0">
                                 <TextBlock Text="開くアプリをクイック選択" Margin="0,0,0,6" FontWeight="SemiBold"/>

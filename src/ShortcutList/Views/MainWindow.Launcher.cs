@@ -199,12 +199,7 @@ public partial class MainWindow
 
     private void ShowFavoriteSearch(IReadOnlyList<ShortcutItem> favorites)
     {
-        if (_isExitRequested || ActivateExistingDialog()) return;
-        _notifyIcon?.ContextMenuStrip?.Close();
-        EnsureQuickSearchWindow();
-        _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
-        _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;
-        _quickSearchWindow.ShowSearch(favorites);
+        ShowQuickSearch(favorites);
     }
 
     private async Task RefreshBookmarkSourcesAsync()
@@ -212,7 +207,7 @@ public partial class MainWindow
         var sources = _store.BookmarkSources.ToArray();
         try { await Task.WhenAll(sources.Select(s => _bookmarkService.RefreshAsync(s))); }
         catch (ObjectDisposedException) { return; }
-        if (!_isExitRequested) RefreshTrayMenu();
+        if (!_isExitRequested) { RefreshTrayMenu(); RefreshQuickEntriesIfVisible(); }
     }
 
     private void AddBookmarkMenuEntry(Forms.ToolStripItemCollection rows, BookmarkSource source,
