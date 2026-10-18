@@ -4,6 +4,7 @@ public class AppSettings
 {
     public int SchemaVersion { get; set; } = 4;
 
+    // Legacy presentation values are retained for export/rollback only. The hidden launcher never reads them.
     public bool ShowLauncherBar { get; set; } = false;
 
     // Desktop coordinates from GetWindowRect, kept in the same coordinate space as Screen.WorkingArea.
@@ -11,7 +12,7 @@ public class AppSettings
     public int? LauncherBarLeft { get; set; }
     public int? LauncherBarTop { get; set; }
 
-    public bool StartMinimizedToTray { get; set; } = false;
+    public bool StartMinimizedToTray { get; set; } = true;
 
     public bool ShowNameColumn { get; set; } = true;
     public bool ShowPathColumn { get; set; } = true;
@@ -29,6 +30,7 @@ public class AppSettings
     public bool CheckUpdateOnStartup { get; set; } = true;
 
     public bool EnableGlobalHotkeys { get; set; } = true;
+    public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
     public bool EnableAutoBackup { get; set; } = true;
     public int AutoBackupKeepCount { get; set; } = 20;
 
@@ -37,7 +39,7 @@ public class AppSettings
     public bool ShowRestoreMessageAfterRecovery { get; set; } = true;
     public bool UseRealFileIcons { get; set; } = true;
 
-    // New profiles open the bookmark list. An explicit stored preference is still honored.
+    // Legacy startup preference is retained, but hidden startup does not display the dashboard.
     public bool ShowHomeOnStartup { get; set; } = false;
     public bool EnableOperationLog { get; set; } = true;
     public int OperationLogKeepCount { get; set; } = 1000;

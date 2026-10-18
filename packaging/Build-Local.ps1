@@ -60,7 +60,7 @@ try {
     Write-Host 'MSI と .NET 同梱のプレビューを作成しています。MSI の実行やアプリの起動は行いません。'
     $buildParameters = @{
         TargetFramework = 'net10.0-windows'
-        PackageVersion = '1.1.2'
+        PackageVersion = '1.1.3'
         OutputDirectory = $buildDirectory
         WixBin = $resolvedWix
     }
@@ -108,12 +108,16 @@ $app プレビュー: ローカル動作確認
 
 1. Launch-Preview.cmd をダブルクリックすると、インストールせず起動できます。
    通常版の設定とは別の preview-profile を使用します。
-   初期画面が出ない場合は、タスクトレイの隠れているアイコンも確認してください。
-2. 概要が出たら「ブックマーク一覧へ（次回も一覧から）」を選びます。
-   「サンプル3件を追加」で実ファイル・フォルダー・公式URLを固定バーから試せます。
+   通常起動では画面や固定バーを出さず、トレイアイコンだけで待機します。
+   Windowsの「隠れているインジケーター」にあるDHubアイコンも確認してください。
+2. Ctrl+Shift+Space で一覧を表示し、選択・Esc・他の画面への切替で隠します。
+   Ctrl+Shift+D またはトレイの管理メニューから管理画面を開きます。
+   「サンプル3件を追加」で実ファイル・フォルダー・公式URLを登録して一覧から試せます。
    自分でボタンをクリックするまで、ファイルやWebサイトは開きません。
    不要な登録は一覧で選んで「削除」。元ファイルは残ります。
-3. 終了はアプリのトレイメニューから行います。ウィンドウの×だけでは常駐する場合があります。
+3. キーが登録できない場合は復帰画面が開きます。「キー設定」で別の候補を選ぶか再試行してください。
+   トレイからも復帰できます。Launch-Preview.cmdの再実行は、同じ保存先の起動中の一覧を表示します。
+4. 終了は一覧下部・キー設定・トレイの「終了」から行います。管理画面の×は隠すだけです。
 
 MSI (手動確認用):
 $($result.msiPath)
@@ -138,7 +142,7 @@ MSI 用 payload をそのまま起動するため「MSI管理」と表示され�
 EXE 単独更新を止めるための installed-by-msi.json は削除しないでください。
 MSI の導入・修復・更新・削除の動作は、この起動確認だけでは検証できません。
 
-詳細なチェック一覧: ソースの docs\LOCAL_CHECK.md
+詳細なチェック一覧: ソースの docs\HIDDEN_LAUNCHER.md と docs\LOCAL_CHECK.md
 "@
     $instructionsPath = Join-Path $buildDirectory 'はじめに.txt'
     $instructions | Set-Content -LiteralPath $instructionsPath -Encoding utf8BOM

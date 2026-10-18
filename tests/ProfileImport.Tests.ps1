@@ -321,6 +321,26 @@ try {
         Write-FixtureJson $path $data
         Assert-Throws { Import-Fixture $f } 'Invalid field type'
     }
+    Invoke-Case 'launcher hotkey survives canonical profile import' {
+        param($f)
+        $path = Join-Path $f.Source 'shortcuts.json'
+        $data = [IO.File]::ReadAllText($path) | ConvertFrom-Json -AsHashtable
+        $data.Settings.QuickSearchHotkey = 'Ctrl+Alt+Space'
+        Write-FixtureJson $path $data
+        Write-FixtureJson (Join-Path $f.Source 'settings.data.json') $data.Settings
+        $result = Import-Fixture $f
+        Assert-AppFixtureResult $f $result
+        $imported = [IO.File]::ReadAllText((Join-Path $result.Destination 'shortcuts.json')) | ConvertFrom-Json -AsHashtable
+        if ($imported.Settings.QuickSearchHotkey -ne 'Ctrl+Alt+Space') { throw 'Hotkey setting was lost.' }
+    }
+    Invoke-Case 'invalid launcher hotkey field type fails closed' {
+        param($f)
+        $path = Join-Path $f.Source 'shortcuts.json'
+        $data = [IO.File]::ReadAllText($path) | ConvertFrom-Json -AsHashtable
+        $data.Settings.QuickSearchHotkey = 42
+        Write-FixtureJson $path $data
+        Assert-Throws { Import-Fixture $f } 'Invalid field type'
+    }
     Invoke-Case 'future nested settings schema cannot recover' {
         param($f)
         $path = Join-Path $f.Source 'shortcuts.json'

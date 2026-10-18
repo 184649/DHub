@@ -11,6 +11,9 @@ public partial class QuickSearchWindow : Window
     private IReadOnlyList<ShortcutItem> _source = Array.Empty<ShortcutItem>();
 
     public event EventHandler<ShortcutItem>? LaunchRequested;
+    public event EventHandler? SettingsRequested;
+    public event EventHandler? ManagementRequested;
+    public event EventHandler? ExitRequested;
 
     public QuickSearchWindow()
     {
@@ -73,7 +76,7 @@ public partial class QuickSearchWindow : Window
             return;
         }
 
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Enter && (SearchTextBox.IsKeyboardFocusWithin || ResultListView.IsKeyboardFocusWithin))
         {
             LaunchSelected();
             e.Handled = true;
@@ -111,6 +114,10 @@ public partial class QuickSearchWindow : Window
         Hide();
         LaunchRequested?.Invoke(this, item);
     }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) { Hide(); SettingsRequested?.Invoke(this, EventArgs.Empty); }
+    private void ManagementButton_Click(object sender, RoutedEventArgs e) { Hide(); ManagementRequested?.Invoke(this, EventArgs.Empty); }
+    private void ExitButton_Click(object sender, RoutedEventArgs e) { Hide(); ExitRequested?.Invoke(this, EventArgs.Empty); }
 
     private void Window_Deactivated(object sender, EventArgs e)
     {

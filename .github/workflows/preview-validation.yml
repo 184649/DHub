@@ -36,6 +36,9 @@ jobs:
       - name: Launcher regression
         shell: pwsh
         run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/LauncherRegression/LauncherRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\LauncherRegression"
+      - name: Hidden launcher regression
+        shell: pwsh
+        run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/HiddenLauncherRegression/HiddenLauncherRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\HiddenLauncherRegression"
       - name: Updater regression
         shell: pwsh
         run: ./scripts/Test-PackagedRuntime.ps1 -Project tests/UpdaterRegression/UpdaterRegression.csproj -OutputDirectory "$env:RUNNER_TEMP\selfcontained-tests\UpdaterRegression"

@@ -8,6 +8,7 @@
         MinWidth="760"
         MinHeight="520"
         WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="False"
         AllowDrop="True"
         Drop="Window_Drop"
         DragOver="Window_DragOver"
@@ -28,12 +29,12 @@
             <WrapPanel Orientation="Horizontal"
                        HorizontalAlignment="Stretch"
                        VerticalAlignment="Top">
-                <Button Style="{StaticResource PrimaryButtonStyle}" Click="ShowLauncherBarButton_Click" Content="固定バーを表示"
-                        ToolTip="お気に入りのファイル・フォルダー・URLをワンクリックで開く固定バーを表示します" Margin="0,0,8,8"/>
+                <Button Style="{StaticResource PrimaryButtonStyle}" Click="ShowLauncherBarButton_Click" Content="一覧を呼び出す"
+                        ToolTip="ホットキーと同じ一覧を一時的に表示します" Margin="0,0,8,8"/>
                 <Button Style="{StaticResource ToolbarButtonStyle}" Click="AddSamplesButton_Click" Content="サンプル3件を追加"
-                        ToolTip="実際に開けるファイル・作業フォルダー・公式URLを追加して固定バーで試します。既存登録は残します" Margin="0,0,8,8"/>
-                <Button Style="{StaticResource ToolbarButtonStyle}" Click="PinSelectionButton_Click" Content="選択をバーに追加"
-                        ToolTip="一覧で選択した項目をお気に入りにして固定バーの末尾に追加します" Margin="0,0,8,8"/>
+                        ToolTip="実際に開けるファイル・作業フォルダー・公式URLを追加して一覧から試します。既存登録は残します" Margin="0,0,8,8"/>
+                <Button Style="{StaticResource ToolbarButtonStyle}" Click="PinSelectionButton_Click" Content="お気に入りに追加"
+                        ToolTip="一覧で選択した項目をお気に入りにしてトレイと一覧で優先表示します" Margin="0,0,8,8"/>
                 <Button Style="{StaticResource ToolbarButtonStyle}" Click="BookmarkSourcesButton_Click" Content="フォルダー連携"
                         ToolTip="既存の .lnk / .url などを含むフォルダーを、元ファイルを変更せずメニューに表示します" Margin="0,0,8,8"/>
 
@@ -164,11 +165,11 @@
         <Border x:Name="BookmarkWelcomePanel" DockPanel.Dock="Top" Background="#EFF6FF" BorderBrush="#BFDBFE"
                 BorderThickness="0,0,0,1" Padding="16,12" Visibility="Collapsed">
             <StackPanel>
-                <TextBlock Text="よく使うファイル・フォルダー・URLを、ひとつの固定バーから開けます。"
+                <TextBlock Text="よく使うファイル・フォルダー・URLを、ホットキーで呼び出す一覧から開けます。"
                            FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                <TextBlock Margin="0,6,0,0" Text="まずは「サンプル3件を追加」で、メモ・作業フォルダー・公式ヘルプを試してください。自分の項目は「追加」または固定バーへのドロップで登録できます。"
+                <TextBlock Margin="0,6,0,0" Text="まずは「サンプル3件を追加」で、メモ・作業フォルダー・公式ヘルプを試してください。自分の項目は「追加」または管理画面へのドロップで登録できます。"
                            TextWrapping="Wrap"/>
-                <TextBlock Margin="0,4,0,0" Text="作業の概要は任意です。日常は固定バー、またはトレイアイコンの左クリックから開けます。"
+                <TextBlock Margin="0,4,0,0" Text="作業の概要は任意です。日常はCtrl+Shift+Space、またはトレイアイコンの左クリックから開けます。"
                            TextWrapping="Wrap" Foreground="{StaticResource SecondaryTextBrush}"/>
             </StackPanel>
         </Border>
@@ -188,7 +189,7 @@
                 <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="|" Margin="0,0,10,2"/>
                 <TextBlock x:Name="VersionTextBlock" Foreground="{StaticResource SecondaryTextBrush}" Text="v1.0.0" Margin="0,0,10,2"/>
                 <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="|" Margin="0,0,10,2"/>
-                <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="Ctrl+Shift+Space クイック検索 / Ctrl+Shift+P 統合検索 / Ctrl+Shift+D 管理画面 / Ctrl+F 検索 / Ctrl+N 追加 / ★列で固定バーに追加・解除 / バーの右クリックで左右に移動 / Enterで開く" Margin="0,0,0,2"/>
+                <TextBlock Foreground="{StaticResource SecondaryTextBrush}" Text="Ctrl+Shift+Space クイック検索 / Ctrl+Shift+P 統合検索 / Ctrl+Shift+D 管理画面 / Ctrl+F 検索 / Ctrl+N 追加 / ★列でお気に入りに追加・解除 / Enterで開く" Margin="0,0,0,2"/>
             </WrapPanel>
         </Border>
 
@@ -268,7 +269,7 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Cursor="Hand"
-                                               ToolTip="クリックで固定バーに追加/解除（お気に入り）"
+                                               ToolTip="クリックでお気に入りに追加/解除"
                                                MouseLeftButtonDown="FavoriteCell_MouseLeftButtonDown"/>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>

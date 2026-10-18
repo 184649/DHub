@@ -19,12 +19,6 @@ namespace ShortcutList.Views;
 
 public partial class MainWindow : Window
 {
-    private const int QuickSearchHotkeyId = 0x534C;
-    private const int MainWindowHotkeyId = 0x534D;
-    private const uint ModControl = 0x0002;
-    private const uint ModShift = 0x0004;
-    private const uint VkSpace = 0x20;
-    private const uint VkD = 0x44;
     private const int WmHotkey = 0x0312;
 
     private const string AllFilter = "すべて";
@@ -43,7 +37,9 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _notifyIcon;
     private Drawing.Icon? _trayIcon;
     private bool _isExitRequested;
-    private bool _isOpeningFromTray;
+    private HotkeyRegistration? _hotkeyRegistration;
+    private HotkeyRegistrationResult _hotkeyResult;
+    private Forms.Form? _hotkeySettings;
     private QuickSearchWindow? _quickSearchWindow;
     private HwndSource? _source;
     private string _sortKey = "Manual";
@@ -61,7 +57,8 @@ public partial class MainWindow : Window
     private const double UpdatedAtColumnDefaultWidth = 150;
     private const double StatusColumnDefaultWidth = 90;
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll")]
@@ -90,24 +87,20 @@ public partial class MainWindow : Window
         VersionTextBlock.Text = $"v{_updateService.CurrentVersion}" + (_updateService.IsMsiInstalled ? " / MSI管理" : string.Empty);
 
         // 常駐起動でも更新確認できるよう、Loaded ではなくコンストラクター完了後に実行。
-        // 新規profileは一覧起動。保存済みの概要表示設定は明示的に変更するまで維持します。
+        // Normal startup is deliberately hidden, including profiles saved by earlier versions.
         _ = Dispatcher.BeginInvoke(new Action(() =>
         {
             if (_store.Settings.CheckUpdateOnStartup)
             {
                 _ = CheckUpdateAsync(silent: true);
             }
-            if (_store.Settings.ShowHomeOnStartup && Visibility == Visibility.Visible)
-            {
-                ShowHomeDashboard();
-            }
         }));
     }
 
     public void ShowInitialWindow()
     {
-        _ = new WindowInteropHelper(this).EnsureHandle();
-        if (!_store.Settings.StartMinimizedToTray) Show();
+        ShowInTaskbar = false;
+        _ = new WindowInteropHelper(this).EnsureHandle(); // RegisterHotKey needs an HWND, not a visible window.
     }
 
     private bool EnsureEditingAllowed()
@@ -126,18 +119,6 @@ public partial class MainWindow : Window
         SearchTextBox.Focus();
         Keyboard.Focus(SearchTextBox);
 
-        // MainWindow は初回起動時には Show() されないため、
-        // トレイアイコンの初回ダブルクリックで初めて Loaded が発生します。
-        // そのタイミングで StartMinimizedToTray を見て Hide() してしまうと、
-        // 「1回目だけ一瞬表示されてすぐ消える」動きになります。
-        // トレイから明示的に開いた場合は、初回 Loaded でも必ず表示を維持します。
-        if (_store.Settings.StartMinimizedToTray && !_isOpeningFromTray)
-        {
-            Hide();
-        }
-
-        _isOpeningFromTray = false;
-
         await Task.CompletedTask;
     }
 
@@ -146,11 +127,12 @@ public partial class MainWindow : Window
         var helper = new WindowInteropHelper(this);
         _source = HwndSource.FromHwnd(helper.Handle);
         _source?.AddHook(WndProc);
-        if (_store.Settings.EnableGlobalHotkeys)
-        {
-            RegisterHotKey(helper.Handle, QuickSearchHotkeyId, ModControl | ModShift, VkSpace);
-            RegisterHotKey(helper.Handle, MainWindowHotkeyId, ModControl | ModShift, VkD);
-        }
+        _hotkeyRegistration = new HotkeyRegistration(
+            (id, modifiers, key) => RegisterHotKey(helper.Handle, id, modifiers, key),
+            id => UnregisterHotKey(helper.Handle, id));
+        ApplyHotkeys();
+        if (_hotkeyResult.HasFailure)
+            _ = Dispatcher.BeginInvoke(new Action(ShowHotkeySettings));
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -162,13 +144,14 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         Hide();
+        ShowInTaskbar = false;
     }
 
     private void Window_Closed(object? sender, EventArgs e)
     {
-        var helper = new WindowInteropHelper(this);
-        UnregisterHotKey(helper.Handle, QuickSearchHotkeyId);
-        UnregisterHotKey(helper.Handle, MainWindowHotkeyId);
+        _isExitRequested = true;
+        _hotkeyRegistration?.Dispose();
+        CloseDialogsForShutdown();
         _source?.RemoveHook(WndProc);
         _notifyIcon?.Dispose();
         _notifyIcon = null;
@@ -176,20 +159,20 @@ public partial class MainWindow : Window
         _trayIcon = null;
         _bookmarkService.Dispose();
         _popupOwner.Dispose();
-        _launcherBar?.Close();
+        _quickSearchWindow?.Close();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmHotkey)
+        if (msg == WmHotkey && !_isExitRequested)
         {
             var id = wParam.ToInt32();
-            if (id == QuickSearchHotkeyId)
+            if (id == HotkeyRegistration.SearchId)
             {
                 ShowQuickSearch();
                 handled = true;
             }
-            else if (id == MainWindowHotkeyId)
+            else if (id == HotkeyRegistration.ManagementId)
             {
                 ShowMainWindowFromTray();
                 handled = true;
@@ -1010,6 +993,8 @@ public partial class MainWindow : Window
         }
 
         _store.ImportSettingsFromFile(dialog.FileName);
+        ApplyHotkeys();
+        if (_hotkeyResult.HasFailure) ShowHotkeySettings();
         ApplyColumnVisibility();
         RefreshTrayMenu();
         ShowInfo("設定をインポートしました。");
@@ -1247,15 +1232,15 @@ public partial class MainWindow : Window
         AddMenuItem(menu, "開く", () => LaunchItem(item));
         AddMenuItem(menu, "場所を開く", () => ShortcutRunner.OpenFolder(item.TargetPath));
         menu.Items.Add(new Separator());
-        AddMenuItem(menu, item.IsFavorite ? "固定バーから外す（登録は残す）" : "固定バーに追加", () =>
+        AddMenuItem(menu, item.IsFavorite ? "お気に入りから外す（登録は残す）" : "お気に入りに追加", () =>
         {
             var pin = !item.IsFavorite;
-            if (SetPinnedItems(new[] { item }, pin) && pin) SetLauncherBarVisible(true);
+            SetPinnedItems(new[] { item }, pin);
         });
         if (item.IsFavorite)
         {
-            AddMenuItem(menu, "固定バーで左へ移動", () => MovePinnedItem(item, -1));
-            AddMenuItem(menu, "固定バーで右へ移動", () => MovePinnedItem(item, 1));
+            AddMenuItem(menu, "お気に入りで前へ移動", () => MovePinnedItem(item, -1));
+            AddMenuItem(menu, "お気に入りで後ろへ移動", () => MovePinnedItem(item, 1));
         }
         AddMenuItem(menu, "開くアプリを候補から選択...", () => SelectOpenApplication(item));
         AddMenuItem(menu, "開くアプリを既定に戻す", () => ResetOpenApplication(item));
@@ -1496,10 +1481,15 @@ public partial class MainWindow : Window
         if (_quickSearchWindow is not null) return;
         _quickSearchWindow = new QuickSearchWindow();
         _quickSearchWindow.Closed += (_, _) => _quickSearchWindow = null;
+        _quickSearchWindow.SettingsRequested += (_, _) => ShowHotkeySettings();
+        _quickSearchWindow.ManagementRequested += (_, _) => ShowMainWindowFromTray();
+        _quickSearchWindow.ExitRequested += (_, _) => RequestExit();
     }
 
     private void ShowQuickSearch()
     {
+        if (_isExitRequested || ActivateExistingDialog()) return;
+        _notifyIcon?.ContextMenuStrip?.Close();
         EnsureQuickSearchWindow();
         _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;
@@ -1531,7 +1521,9 @@ public partial class MainWindow : Window
 
     private void ShowMainWindowFromTray()
     {
-        _isOpeningFromTray = true;
+        if (_isExitRequested || ActivateExistingDialog()) return;
+        _notifyIcon?.ContextMenuStrip?.Close();
+        _quickSearchWindow?.Hide();
 
         if (WindowState == WindowState.Minimized)
         {
@@ -1540,7 +1532,6 @@ public partial class MainWindow : Window
 
         Show();
         WindowState = WindowState.Normal;
-        ShowInTaskbar = true;
         Activate();
         Focus();
 
@@ -1851,16 +1842,17 @@ public partial class MainWindow : Window
         var backup = new Forms.TabPage("保存・復元");
         var data = new Forms.TabPage("入出力");
 
-        var startMinimized = new Forms.CheckBox { Text = "起動時にトレイへ最小化", Left = 16, Top = 20, Width = 300, Checked = _store.Settings.StartMinimizedToTray };
+        var startupHint = new Forms.Label { Text = "起動時はトレイのみ。ホットキーで一覧を開きます。", Left = 16, Top = 20, Width = 460 };
         var checkUpdate = new Forms.CheckBox { Text = "起動時に更新確認", Left = 16, Top = 52, Width = 300, Checked = _store.Settings.CheckUpdateOnStartup };
-        var hotkeys = new Forms.CheckBox { Text = "グローバルホットキーを有効化", Left = 16, Top = 84, Width = 300, Checked = _store.Settings.EnableGlobalHotkeys };
+        var hotkeys = new Forms.Button { Text = "ホットキーの設定 / 登録を再試行", Left = 16, Top = 80, Width = 300, Height = 28 };
+        hotkeys.Click += (_, _) => ShowHotkeySettings();
         var realIcons = new Forms.CheckBox { Text = "実ファイルのアイコン表示を有効化", Left = 16, Top = 116, Width = 300, Checked = _store.Settings.UseRealFileIcons };
-        var showHome = new Forms.CheckBox { Text = "起動時に作業の概要を表示（任意）", Left = 16, Top = 148, Width = 400, Checked = _store.Settings.ShowHomeOnStartup };
+        var showHome = new Forms.Label { Text = "作業の概要は管理メニューから開けます。", Left = 16, Top = 148, Width = 400 };
         var operationLog = new Forms.CheckBox { Text = "起動ログ・操作ログを保存", Left = 16, Top = 180, Width = 300, Checked = _store.Settings.EnableOperationLog };
         var separatedData = new Forms.CheckBox { Text = "設定・データを分離ファイルにも保存", Left = 16, Top = 212, Width = 360, Checked = _store.Settings.EnableSeparatedDataFiles };
         var updateLabel = new Forms.Label { Text = "更新確認URL", Left = 16, Top = 248, Width = 120 };
         var updateUrl = new Forms.TextBox { Left = 16, Top = 270, Width = 470, Text = _store.Settings.UpdateVersionUrl };
-        general.Controls.AddRange(new Forms.Control[] { startMinimized, checkUpdate, hotkeys, realIcons, showHome, operationLog, separatedData, updateLabel, updateUrl });
+        general.Controls.AddRange(new Forms.Control[] { startupHint, checkUpdate, hotkeys, realIcons, showHome, operationLog, separatedData, updateLabel, updateUrl });
 
         var autoBackup = new Forms.CheckBox { Text = "保存時に自動バックアップを作成", Left = 16, Top = 20, Width = 320, Checked = _store.Settings.EnableAutoBackup };
         var safeSave = new Forms.CheckBox { Text = "安全保存を有効化（一時ファイル→検証→置換）", Left = 16, Top = 52, Width = 420, Checked = _store.Settings.EnableSafeSave };
@@ -1914,11 +1906,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _store.Settings.StartMinimizedToTray = startMinimized.Checked;
         _store.Settings.CheckUpdateOnStartup = checkUpdate.Checked;
-        _store.Settings.EnableGlobalHotkeys = hotkeys.Checked;
         _store.Settings.UseRealFileIcons = realIcons.Checked;
-        _store.Settings.ShowHomeOnStartup = showHome.Checked;
         _store.Settings.EnableOperationLog = operationLog.Checked;
         _store.Settings.EnableSeparatedDataFiles = separatedData.Checked;
         FileIconService.IsEnabled = _store.Settings.UseRealFileIcons;
@@ -1932,7 +1921,7 @@ public partial class MainWindow : Window
 
         ApplyColumnVisibility();
         RefreshTrayMenu();
-        ShowInfo("設定を保存しました。ホットキー設定はアプリ再起動後に反映されます。");
+        ShowInfo("設定を保存しました。");
     }
 
     private void ShowRestoreWizard()
@@ -2429,11 +2418,11 @@ public partial class MainWindow : Window
         };
 
         var explanation = new Forms.Label { Left = 16, Top = 48, Width = 840, Height = 30,
-            Text = "日常の入口はブックマーク一覧と固定バーです。この概要は、履歴や作業セットをまとめて見るときだけ使います。" };
+            Text = "日常の入口はホットキーとトレイです。この概要は、履歴や作業セットをまとめて見るときだけ使います。" };
         var bookmarks = new Forms.Button { Left = 16, Top = 82, Width = 410, Height = 32,
-            Text = "ブックマーク一覧へ（次回も一覧から）", BackColor = Drawing.Color.FromArgb(37, 99, 235),
+            Text = "ブックマーク一覧へ", BackColor = Drawing.Color.FromArgb(37, 99, 235),
             ForeColor = Drawing.Color.White, FlatStyle = Forms.FlatStyle.Flat };
-        bookmarks.Click += (_, _) => { if (UseBookmarkListOnStartup()) { form.Close(); ShowMainWindowFromTray(); } };
+        bookmarks.Click += (_, _) => { form.Close(); ShowMainWindowFromTray(); };
         var samples = new Forms.Button { Left = 438, Top = 82, Width = 220, Height = 32, Text = "サンプル3件を追加" };
         samples.Click += (_, _) => { form.Close(); ShowMainWindowFromTray(); AddSampleBookmarks(); };
 
@@ -2983,8 +2972,7 @@ public partial class MainWindow : Window
 
             if (await _updateService.StartUpdateAsync(latest, _store.StorageFolder))
             {
-                _isExitRequested = true;
-                WpfApplication.Current.Shutdown();
+                RequestExit();
             }
         }
         catch (Exception ex)

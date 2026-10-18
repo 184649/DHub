@@ -11,7 +11,7 @@ public partial class MainWindow
     private void AddSampleBookmarks()
     {
         if (!EnsureEditingAllowed()) return;
-        if (AskYesNo("次の3件を追加して、固定バーで試しますか？\n\n" +
+        if (AskYesNo("次の3件を追加して、一覧から試しますか？\n\n" +
             "・使い方メモ: テキストを既定のアプリで開く\n" +
             "・作業フォルダー: 資料フォルダーを開く\n" +
             "・Windows ヘルプ: Microsoft公式サイトをブラウザーで開く\n\n" +
@@ -46,29 +46,16 @@ public partial class MainWindow
                 ShortcutListView.SelectedItem = added[0];
                 ShortcutListView.ScrollIntoView(added[0]);
             }
-            ShowLauncherBar(); // This session only; leave the user's saved bar visibility preference intact.
+            RefreshTrayMenu();
             _ = RefreshLinkStatusAsync(false);
             ShowInfo(added.Count > 0
-                ? $"サンプルを {added.Count} 件追加しました。固定バーのボタンをクリックして試せます。\nバーは今回だけ表示しています。次回も表示するには「固定バーを表示」を選んでください。\n一覧の「削除」は登録だけを削除し、ファイルやフォルダーは残します。"
-                : "同じサンプルまたは起動方法がすでにあるため、登録は追加していません。編集内容やお気に入りの設定もそのままです。\n固定バーにない項目は、一覧で選んで「選択をバーに追加」で試せます。");
+                ? $"サンプルを {added.Count} 件追加しました。ホットキーで一覧を開くか、トレイから選んで試せます。\n一覧の「削除」は登録だけを削除し、ファイルやフォルダーは残します。"
+                : "同じサンプルまたは起動方法がすでにあるため、登録は追加していません。編集内容やお気に入りの設定もそのままです。\nトレイにない項目は、一覧で選んで「お気に入りに追加」で表示できます。");
         }
         catch (Exception ex)
         {
-            ShowInfo("サンプルの登録処理は完了しましたが、画面の更新または固定バーの表示に失敗しました。\n登録を再追加せず、管理画面を開き直してください。\n" + ex.Message);
+            ShowInfo("サンプルの登録処理は完了しましたが、画面の更新に失敗しました。\n登録を再追加せず、管理画面を開き直してください。\n" + ex.Message);
         }
     }
 
-    private bool UseBookmarkListOnStartup()
-    {
-        if (!EnsureEditingAllowed()) return false;
-        var previous = _store.Settings.ShowHomeOnStartup;
-        _store.Settings.ShowHomeOnStartup = false;
-        try { _store.Save(); return true; }
-        catch (Exception ex)
-        {
-            _store.Settings.ShowHomeOnStartup = previous;
-            ShowInfo("次回の起動画面を保存できませんでした。設定は画面上で戻しました。\n「保存データの確認 / 復旧」で確認してください。\n" + ex.Message);
-            return false;
-        }
-    }
 }

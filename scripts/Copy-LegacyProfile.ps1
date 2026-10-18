@@ -340,7 +340,7 @@ function ConvertTo-CanonicalProfileJson([Text.Json.JsonElement]$Element) {
 }
 
 function Assert-DHubSettings([Text.Json.JsonElement]$Settings) {
-    $fields = @{ SchemaVersion = 'Integer'; UpdateVersionUrl = 'String'; AutoBackupKeepCount = 'Integer'; OperationLogKeepCount = 'Integer'; LauncherBarLeft = 'NullableInteger'; LauncherBarTop = 'NullableInteger' }
+    $fields = @{ SchemaVersion = 'Integer'; QuickSearchHotkey = 'String'; UpdateVersionUrl = 'String'; AutoBackupKeepCount = 'Integer'; OperationLogKeepCount = 'Integer'; LauncherBarLeft = 'NullableInteger'; LauncherBarTop = 'NullableInteger' }
     foreach ($name in @('ShowLauncherBar','StartMinimizedToTray','ShowNameColumn','ShowPathColumn','ShowArgumentsColumn',
         'ShowOpenApplicationColumn','ShowGroupColumn','ShowTagsColumn','ShowLaunchCountColumn','ShowLastLaunchColumn',
         'ShowCreatedAtColumn','ShowUpdatedAtColumn','ShowStatusColumn','CheckUpdateOnStartup','EnableGlobalHotkeys',

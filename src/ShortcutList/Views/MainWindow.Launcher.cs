@@ -12,7 +12,6 @@ namespace ShortcutList.Views;
 public partial class MainWindow
 {
     private readonly BookmarkSourceService _bookmarkService = new();
-    private Window? _launcherBar;
     private readonly PopupOwner _popupOwner = new();
     private IntPtr _popupPreviousWindow;
     private bool _popupActive;
@@ -29,6 +28,7 @@ public partial class MainWindow
     }
     private void ShowLauncherPopup()
     {
+        if (_isExitRequested) return;
         RefreshTrayMenu();
         var menu = _notifyIcon?.ContextMenuStrip;
         if (menu is null) return;
@@ -52,7 +52,6 @@ public partial class MainWindow
         };
         RefreshTrayMenu();
         _ = RefreshBookmarkSourcesAsync();
-        if (_store.Settings.ShowLauncherBar) ShowLauncherBar();
     }
 
     private static string MenuText(string value) => value.Replace("&", "&&");
@@ -75,8 +74,7 @@ public partial class MainWindow
 
     private void RefreshTrayMenu()
     {
-        RefreshLauncherBar();
-        if (_notifyIcon is null) return;
+        if (_isExitRequested || _notifyIcon is null) return;
         if (_notifyIcon.ContextMenuStrip?.Visible == true) { _trayRefreshPending = true; return; }
         var menu = new Forms.ContextMenuStrip { ShowItemToolTips = true };
         var favorites = OrderedLauncherPins();
@@ -169,18 +167,13 @@ public partial class MainWindow
             try { _store.Save(); _historySavePending = false; ShowInfo("履歴を保存しました。起動要求は再送していません。"); }
             catch (Exception ex) { ShowInfo("保存できませんでした。\n" + ex.Message); }
         }).Enabled = _historySavePending;
-        AddTrayAction(manage.DropDownItems, "固定バーを表示 / 非表示", () => SetLauncherBarVisible(_launcherBar?.IsVisible != true));
-        var topmost = AddTrayAction(manage.DropDownItems, "固定バーを最前面に表示（今回のみ）", () =>
-        {
-            ShowLauncherBar();
-            _launcherBar!.Topmost = !_launcherBar.Topmost;
-        });
-        topmost.Checked = _launcherBar?.Topmost == true;
+        AddTrayAction(manage.DropDownItems, "ホットキーの設定 / 登録を再試行", ShowHotkeySettings);
         AddTrayAction(manage.DropDownItems, "更新を確認", () => _ = CheckUpdateAsync(false));
         menu.Items.Add(manage);
-        AddTrayAction(menu.Items, "終了", () => { _isExitRequested = true; System.Windows.Application.Current.Shutdown(); });
+        AddTrayAction(menu.Items, "終了", RequestExit);
         menu.Closed += (_, args) => Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (_isExitRequested) return;
             if (_popupActive)
             {
                 _popupActive = false;
@@ -199,13 +192,15 @@ public partial class MainWindow
     private Forms.ToolStripMenuItem AddTrayAction(Forms.ToolStripItemCollection items, string label, Action action)
     {
         var row = new Forms.ToolStripMenuItem(label);
-        row.Click += (_, _) => Dispatcher.Invoke(action);
+        row.Click += (_, _) => Dispatcher.BeginInvoke(new Action(() => { if (!_isExitRequested) action(); }));
         items.Add(row);
         return row;
     }
 
     private void ShowFavoriteSearch(IReadOnlyList<ShortcutItem> favorites)
     {
+        if (_isExitRequested || ActivateExistingDialog()) return;
+        _notifyIcon?.ContextMenuStrip?.Close();
         EnsureQuickSearchWindow();
         _quickSearchWindow!.LaunchRequested -= QuickSearchWindow_LaunchRequested;
         _quickSearchWindow.LaunchRequested += QuickSearchWindow_LaunchRequested;

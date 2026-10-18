@@ -1,5 +1,8 @@
 # DHub Preview: current-user MSI
 
+> 1.1.3-preview.1の通常起動では画面・固定バーを表示せずトレイで待機します。Ctrl+Shift+Space、トレイ、または同じ保存先のDHub再実行で一覧を呼び出してください。復帰・終了・受入確認は[非表示ランチャー](HIDDEN_LAUNCHER.md)を参照してください。通常MSIのビルド既定版は1.1.3です（回帰テストの1.1.0〜1.1.2は合成fixture）。
+
+
 ## Scope and current validation status
 
 This installer is for the separate **DHub Preview** channel. It is not a production release and is not published by these scripts. Build output stays in a local output directory. The MSI is currently **unsigned**: Windows may show an unknown-publisher warning. Public distribution requires a separate signing, release and supported-Windows acceptance review.
