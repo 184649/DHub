@@ -1,44 +1,45 @@
-# AIMANGA Virtual Office — GitHub Pages / dawn-app.jp 対応準備
+# AIMANGA Virtual Office — 同一ドメイン /manga/ 版
 
-## 制作物の扱い
+## 正式なURL
 
-- このフォルダには**公開してもよい固定の仮想社員名・部屋・業務概要だけ**を収録します。原稿・非公開企画・Notion内部ログ・PDF・トークン・個人情報は含みません。
-- 公開GitHub Pagesはアクセス制限されたプライベートサイトにはなりません。実際の稼働・完成1話PDFは**認証済みNotion**で確認します。
-- ブラウザの「設定」に入力する2つのNotion URLは、利用者の端末の `localStorage` に保存します。GitHubには送信しません。Notionの認証トークンを入力してはいけません。
-- 画面に使うAI社員名・表示灯は実在社員のリアルタイム状態を示すものではありません。
+- **最終URL（既存のDawnサイト配下）:** `https://dawn-app.jp/manga/`
+- **既存サイト:** `https://dawn-app.jp/` と `https://dawn-app.jp/home` は変更しない
+- **GitHub Pagesで公開する場合のプレビュー（Pages有効化後）:** `https://184649.github.io/DHub/manga/`
+- **採用しない構成:** `manga.dawn-app.jp`（サブドメイン）、`dawn-app.jp/home/office/`（旧案）
 
-## GitHub Pages 側
+**2026-10-26:** URLとGitHub上の静的ファイルを準備。実際の `dawn-app.jp/manga/` への反映・動作確認は、既存VPSのNginx設定と静的ファイルを変更できる管理権限を持つ環境でのデプロイ後に行う。既存サイトに手を加えたと偽らない。
 
-- 公開専用ブランチ：`184649/DHub` の `gh-pages`。`main` には一切変更しません。
-- GitHub > DHub > Settings > Pages > Build and deployment > Deploy from a branch > `gh-pages` > `/(root)` で Pages を有効化します（利用可能な場合）。既存Pagesが別設定なら**切り替える前に確認**します。
-- Pages が有効になった場合の**想定**サイト：`https://184649.github.io/DHub/office/` （現時点で稼働を保証しません）。
-- `https://184649.github.io/DHub/home/office/` の同内容コピーも置きます。
-- 公開対象に `.nojekyll`、`office/`、`home/office/` を用意。既存 `main` のバイナリZIPなどは `gh-pages` ブランチのサイトに引き継がない。
-- `CNAME` ファイルは作成していません。**dawn-app.jp のDNSは変更しません**。
+## GitHub上のファイル
 
-## 既存 dawn-app.jp/home 配下への追加（ConoHa VPS / Nginx を想定）
+- `manga/index.html` — 完成した静的Webアプリ。相対パスで配信
+- `manga/assets/office-art.webp` — アプリのオフィス画像
+- `manga/icon.svg`、`manga/manifest.webmanifest` — アイコン・ホーム画面追加用設定
+- `deploy/conoha-nginx-location.conf` — 既存 `dawn-app.jp` の**既存 HTTPS server ブロック**への非破壊的な追記例
+- `deploy/README.md` — 本文書
 
-**目的URL： `https://dawn-app.jp/home/office/`**。既存の `https://dawn-app.jp/home` を置換しません。
+`gh-pages` 専用ブランチ。既存DHubの `main`、Dawnリポジトリ、`dawn-app.jp/home` アプリには変更しない。以前の作業で追加した `gh-pages/home/office/` は廃止する。GitHub Pagesの既存 `/office/` ミラーは旧バージョンのブックマーク用に残せるが、正式な新規配信ルートは `/manga/` とする。
 
-1. 現在の `dawn-app.jp` が本当に ConoHa VPS / Nginx を使用しているか、公開サーバーの管理画面と設定で確認してください。ホスティングが変更済みなら現在の構成に合わせます。
-2. 既存 Nginx server 設定をバックアップしてください。**既存 `/home` の location や証明書・PM2 プロセス・DNS・main ブランチを上書き禁止**。
-3. 配信専用ディレクトリ例：`/srv/aimanga-office/current/` に、この配布物の **`home/office/` の中身（index.html、assets/、manifest.webmanifest、icon.svg）** を配置します。
-4. `deploy/conoha-nginx-location.conf` の `/home/office/` 専用 location を**既存サイトの正しい HTTPS server ブロック内**に追加します。既存の認証方式があればそちらで保護します。同梱のNginx例ではBasic認証を**有効**にしています。サーバー側で認証ファイル（例：`/etc/nginx/.aimanga-office-htpasswd`）を安全に作成してから設定を読み込みます。既存の認証方式に変更する場合も、同等のアクセス制限を維持してください。秘密情報はリポジトリへコミットしません。
-5. Nginx構文を検証し、既存トップ／home／APIへのルーティングが変わらないことを確認したうえでのみリロード。証明書・DNS はそのまま使います。
-6. 公開後に `https://dawn-app.jp/home/office/` をiPhoneで表示、部屋タップ・下部ナビ・Notionリンク設定・既存Dawnホームを確認します。**この手順は現在未実施です。**
-7. `deploy/dawn-home-link.html` は既存Dawnの `/home` に「オフィスを開く」リンクを追加する参考です。既存ホームのソースに合った変更が必要です。
+## 既存のdawn-app.jpへのデプロイ例（VPS / Nginx を想定）
 
-## GitHub Pages と既存ドメインの制約
+**サーバーの実際の運営方式・設定は管理環境で再確認すること。** VPS/Nginx以外ならホスティング方式に合わせ、同じ `/manga/` ルートを作る。DNSや証明書は変更しない。
 
-- DNSは**ドメイン名**の参照先を変えます。`/home/office/` というURLのパスだけをGitHub Pagesに振り分けることはDNS設定ではできません。
-- 同じ既存 `dawn-app.jp` 上の1パスとして共存するには、Nginxルーティング／既存アプリの静的配信／リバースプロキシ等の**既存配信基盤側**の設定が必要です。
-- `dawn-app.jp` の `CNAME` をGitHub Pages側で勝手に設定すると既存サイトの障害やドメイン競合を起こし得るため、設定しません。
-- サーバーのアクセス権限が確認できない状態で自動変更・自動デプロイをしたと主張しません。
+1. 既存の `dawn-app.jp` 設定とコンテンツをバックアップし、`/home`・既存API・リバースプロキシ・SSL設定を確認する。
+2. リポジトリの `gh-pages/manga/` **内の4点**をサーバーの専用フォルダ `/srv/aimanga-office/current/` へコピーする。例：`index.html`、`assets/`、`manifest.webmanifest`、`icon.svg`。他アプリのフォルダには触れない。
+3. `deploy/conoha-nginx-location.conf` を確認して、**dawn-app.jpの既存 HTTPS server ブロック内**に `location = /manga` と `location ^~ /manga/` を追記する。新しい `server_name`、`CNAME`、`root` ブロックは作らない。
+4. 設定例は `auth_basic` を有効化してある。サーバー側で `/etc/nginx/.aimanga-office-htpasswd` を安全に作成するか、既存認証基盤と統合してから読み込む。**認証パスワードとハッシュはGitHubへ保存しない**。
+5. `nginx -t` で構文確認。既存の `/`、`/home`、APIが変わらないことを検証してからNginxをリロードする。
+6. ブラウザ・iPhoneで `https://dawn-app.jp/manga/` と `https://dawn-app.jp/manga/manifest.webmanifest`、画像読み込み、8部署タップ、モバイル表示、Notionリンクが正常であることを確認する。
+7. 問題があれば、追加した2個の `location` 設定を取り消してリロードする。既存のDawnホームに影響させない。
 
-## 動作と受け入れ条件
+サーバー側にNginx変更権限が無ければ、**GitHub側のファイル配置のみでは `dawn-app.jp/manga/` は開通しない**。DNSはパスの振分けができないため、`/manga/` というルートは既存のWebサーバー側に設定が必要。
 
-- スマホ・PC両対応。8名の部屋と社員カードをタップできる。
-- 社内Notionへのリンクは**ユーザー本人が各端末に設定**。APIトークンを公開HTMLに含めない。
-- 公開版は固定情報で、実際のAIの内部処理・リアルタイムの作業を見せるものではない。
-- 1話全編PDF以外を社長に提出しない。採否・Kindle出版許可はCEO本人のみ。
-- 将来の本物のリアルタイム同期は、既存認証と読み取り専用サーバー側Notion接続を必要とし、別途設計・承認・実装する。
+## GitHub Pages（必要な場合のみ）
+
+`184649/DHub` → Settings → Pages → Source「Deploy from a branch」 → Branch「gh-pages」、Folder「/(root)」。**他のサイトがすでにPagesを使っている場合は、設定を上書きしない**。GitHub Pagesは公開サイトであるため、未公開原稿・PDF・APIキー・Notion内部ログは載せない。Pagesはオフィスの見本を直接見るための配信先であり、`dawn-app.jp`の代わりにDNSを付け替えない。
+
+## 重要な安全・運用上の制限
+
+- 配信するHTMLには架空の社員名、部署、公開用イメージ、デモ的な状態表示のみを置く。**本当の稼働中・終了・障害を自動同期した情報ではない**。
+- Notionリンクを入力する場合は、利用者のブラウザ内のみに保存。トークンや秘密URLはGitHub/公開HTMLへ書き込まない。
+- 完成1話PDFの正本と採用・出版決裁は**Notionに残し、CEO本人が判断する**。GitHubを漫画原稿の正本としない。
+- Codex/ChatGPT Work、有料API、追加費用を発生させない。認証回避・アクセス制限の撤廃は行わない。
