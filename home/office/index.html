@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#112840">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="AI漫画出版社の仮想オフィス。AI社員8名の担当部署を確認するWebアプリ。">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <title>AIMANGA | Virtual Office</title>
+  <style>
+    :root{--ink:#1a304d;--sub:#617a91;--line:#dce6ee;--card:#fff;--blue:#247cac;--navy:#132a44;--gold:#f8c575;--sky:#e8f4fa;--shadow:0 9px 27px rgba(23,52,80,.10)}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(180deg,#e4f4fb,#f6f8fb 400px);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+    button,input{font:inherit}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f7b849;outline-offset:3px}
+    header{position:sticky;top:0;z-index:10;border-bottom:1px solid #d6e3ee;background:rgba(255,255,255,.94);backdrop-filter:blur(14px)}
+    .head{max-width:1110px;margin:auto;min-height:66px;display:flex;align-items:center;gap:12px;padding:10px 18px}
+    .logo{background:linear-gradient(130deg,#2c85b4,#12395d);color:white;width:41px;height:41px;border-radius:13px;display:grid;place-items:center;font-size:24px}
+    .brand{font-size:17px;font-weight:900}.brand small{font-size:10px;letter-spacing:.12em;color:#6b89a2;display:block;margin-top:2px}.header-right{margin-left:auto;color:#71899d;font-size:10px;text-align:right}.header-right b{color:#1b5a80;display:block}
+    main{max-width:1110px;margin:auto;padding:21px 18px 112px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(24px,4vw,35px);letter-spacing:.01em;margin-bottom:7px}.lede{color:#647d94;font-size:13px;line-height:1.7}
+    .title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:19px}.illustration-tag{white-space:nowrap;border-radius:100px;padding:9px 12px;background:#fff2d6;color:#95651d;font-weight:800;font-size:10px;border:1px solid #f1d7a8}
+    .summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:17px}.summary>div{background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px;box-shadow:0 3px 13px #1d4c690d}.summary strong{font-size:24px;display:block}.summary span{display:block;font-size:11px;color:var(--sub)}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 255px;align-items:start;gap:15px}.panel{background:#fff;border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow);overflow:hidden}.panel-title{padding:15px 17px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:850}.panel-title small{font-weight:500;font-size:10px;color:#6c859c}.warning{padding:11px 16px;background:#fff7e6;color:#785b2e;font-size:11px;line-height:1.65;border-block:1px solid #f6e9cc}
+    .canvas-scroll{overflow:auto;background:#dceefa;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}.building{position:relative;width:100%;min-width:660px;aspect-ratio:1086/529;background-image:url('./assets/office-art.webp');background-size:100% 100%;background-repeat:no-repeat}
+    .hit{appearance:none;position:absolute;border:0;background:transparent;z-index:2;color:transparent;border-radius:8px}.hit:hover{background:rgba(57,147,210,.15);outline:2px solid rgba(26,104,167,.75)}.hit:focus-visible{outline:3px solid #f2a93c}.hit .sr{position:absolute;left:-9999px}
+    .ceo{left:33%;top:0%;height:30%;width:35%}.r0{left:0%;top:29%;width:25%;height:27%}.r1{left:25%;top:29%;width:25%;height:27%}.r2{left:50%;top:29%;width:25%;height:27%}.r3{left:75%;top:29%;width:25%;height:27%}.r4{left:0%;top:56%;width:25%;height:27%}.r5{left:25%;top:56%;width:25%;height:27%}.r6{left:50%;top:56%;width:25%;height:27%}.r7{left:75%;top:56%;width:25%;height:27%}
+    .below{padding:12px 15px;display:flex;justify-content:space-between;gap:8px;color:var(--sub);font-size:11px}.below span{color:#2c799b;font-weight:800}
+    .note-panel{padding:18px}.note-panel h3{font-size:13px;margin-bottom:10px}.note-panel p{font-size:12px;line-height:1.7;color:var(--sub)}.notice{background:#eef7fc;padding:13px;border-radius:10px;font-size:11px;line-height:1.7;color:#47718e}.cta{display:inline-block;border-radius:10px;padding:11px 13px;background:linear-gradient(130deg,#2377a5,#23547c);color:white;font-weight:800;font-size:12px;text-decoration:none}.cta.secondary{background:#eaf2f9;color:#285777;border:1px solid #cddde8}
+    .section{display:none}.section.active{display:block}.staffgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:17px}.employee{border:1px solid #dfebf3;background:white;padding:13px;text-align:left;border-radius:14px;box-shadow:0 4px 12px #1d4c690a;min-height:128px}.employee:hover{border-color:#72a8c9}.avatar{width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(130deg,#eaf6fb,#fff3e6);font-size:26px;margin-bottom:9px}.employee b{font-size:14px;display:block}.employee small{font-size:10px;color:var(--sub)}
+    .flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.step{padding:16px;background:#fff;border:1px solid #dce6ee;border-radius:13px}.step b{display:block;margin-bottom:8px}.step small{color:var(--sub);font-size:11px;line-height:1.6}.gate{display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:16px;background:#fff;border:1px solid var(--line)}.gate strong{font-size:17px}.gate p{color:var(--sub);font-size:12px;line-height:1.65}.setting-label{font-size:12px;font-weight:800;display:block;margin-bottom:4px}input{height:44px;border:1px solid #cddce7;border-radius:10px;width:100%;padding:8px 11px;min-width:0}.settinghint{font-size:11px;color:var(--sub);line-height:1.6}.actions{display:flex;flex-wrap:wrap;gap:9px}.actions button{border-radius:10px;border:0;background:#245f88;color:white;padding:11px 14px;font-weight:750}.actions button.alt{background:#eff4f8;color:#325e79;border:1px solid #dbe7ef}
+    .tabbar{position:fixed;z-index:20;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(13px);border-top:1px solid #d8e5ed;display:flex;justify-content:center;gap:0;padding:6px max(8px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom))}.tabbar button{appearance:none;background:transparent;border:0;color:#648099;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:6px 17px;min-width:87px;border-radius:12px}.tabbar button[aria-current="page"]{background:#e4f5fc;color:#216d9b}.tabbar .ico{font-size:21px}
+    .overlay{position:fixed;z-index:50;inset:0;background:rgba(10,26,46,.46);display:none;align-items:flex-end;justify-content:center}.overlay.on{display:flex}.sheet{background:white;border-radius:22px 22px 0 0;max-height:82vh;overflow-y:auto;width:min(100%,580px);padding:21px;padding-bottom:calc(24px + env(safe-area-inset-bottom));box-shadow:0 -16px 50px #16334c50}.sheet-head{display:flex;align-items:center;gap:14px;margin-bottom:15px}.sheet-head .avatar{font-size:36px;width:68px;height:68px;margin:0}.sheet-head b{font-size:20px}.sheet-head small{display:block;color:var(--sub)}.sheet-text{font-size:13px;line-height:1.75;color:#48657b}.dismiss{margin-left:auto;background:#eff4f9;border:0;width:34px;height:34px;border-radius:50%;font-size:22px}.muted{font-size:11px;color:var(--sub)}
+    @media(max-width:890px){.layout{grid-template-columns:1fr}.note-panel{display:none}.staffgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:580px){main{padding:17px 12px 110px}.head{padding:8px 13px}.summary{gap:7px}.summary>div{padding:11px}.summary strong{font-size:21px}.summary span{font-size:9px}.title-row{align-items:start}.illustration-tag{font-size:9px;padding:7px 9px}.staffgrid{gap:7px}.employee{padding:10px}.flow{grid-template-columns:1fr}.tabbar button{padding:5px 9px;min-width:72px}.building{min-width:720px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+<header><div class="head"><div class="logo">🏢</div><div class="brand">AI漫画出版社<small>AIMANGA / VIRTUAL OFFICE</small></div><div class="header-right"><b>WEB APP</b>静的オフィス表示</div></div></header>
+<main>
+<section id="tab-office" class="section active">
+  <div class="title-row"><div><h1>バーチャルオフィス</h1><p class="lede">8つの部署をタップして、AI社員の担当を確認できます。</p></div><span class="illustration-tag">公開デモ画面</span></div>
+  <div class="summary"><div><strong>8</strong><span>AI社員</span></div><div><strong>8</strong><span>部署</span></div><div><strong>—</strong><span>実稼働は非表示</span></div></div>
+  <div class="layout">
+    <section class="panel"><div class="panel-title"><span>🏙️ オフィス全体</span><small>部屋をタップ</small></div><div class="warning">このイラスト内の稼働ランプ・時計は<strong>デザイン上のサンプル</strong>です。実際のAI稼働を反映していません。</div>
+    <div class="canvas-scroll" tabindex="0" aria-label="バーチャルオフィス 横スクロール可能"><div class="building" id="building">
+      <button class="hit ceo" data-staff="ceo" aria-label="CEO室"><span class="sr">CEO</span></button>
+      <button class="hit r0" data-staff="dot" aria-label="dot 制作統括本部"><span class="sr">dot</span></button>
+      <button class="hit r1" data-staff="hoshino" aria-label="星野紡 企画脚本部"><span class="sr">星野</span></button>
+      <button class="hit r2" data-staff="asakura" aria-label="朝倉奏 ネーム演出部"><span class="sr">朝倉</span></button>
+      <button class="hit r3" data-staff="fujiwara" aria-label="藤原透 作画設計部"><span class="sr">藤原</span></button>
+      <button class="hit r4" data-staff="kiriya" aria-label="桐谷凛 品質保証部"><span class="sr">桐谷</span></button>
+      <button class="hit r5" data-staff="minase" aria-label="水瀬律 出版権利管理部"><span class="sr">水瀬</span></button>
+      <button class="hit r6" data-staff="miyahara" aria-label="宮原遥 制作管理納品部"><span class="sr">宮原</span></button>
+      <button class="hit r7" data-staff="sakura" aria-label="佐倉慧 運営監査部"><span class="sr">佐倉</span></button>
+    </div></div><div class="below"><span>↔️ スマホでは横スクロール</span><span>全室タップ可能</span></div>
+    </section>
+    <aside class="panel note-panel"><h3>👑 CEO向け案内</h3><p>各社員は独立した制作工程を担当。会社の仕事を見える化します。</p><div class="notice">完成した漫画は「1話全編を1つのPDF」でCEOへ。制作中の資料や原稿はNotionに保持します。</div><p style="margin-top:15px">詳細情報は、ログインが必要な社内Notionで確認します。この公開画面に未公開の原稿や実行ログは載せていません。</p></aside>
+  </div>
+  <div class="panel" style="margin-top:17px;padding:17px"><b>👥 AI社員一覧</b><div id="staff-grid" class="staffgrid"></div></div>
+</section>
+<section id="tab-work" class="section"><div class="title-row"><div><h1>制作ワークフロー</h1><p class="lede">部署間で仕事を引き継いで、1話を完成させます。</p></div></div><div class="flow">
+  <div class="step"><b>1. 企画・脚本</b><small>星野 紡がストーリーを制作</small></div><div class="step"><b>2. ネーム演出</b><small>朝倉 奏が漫画の読順・コマを設計</small></div><div class="step"><b>3. 作画設計</b><small>藤原 透がキャラ・背景の連続性を管理</small></div><div class="step"><b>4. 作画統括</b><small>dotが実画像制作を担当</small></div><div class="step"><b>5. 独立QA</b><small>桐谷 凛が全ページを検証</small></div><div class="step"><b>6. 1話PDF納品</b><small>宮原 遥が1話PDFを構成し提出</small></div>
+</div><div class="gate" style="margin-top:16px"><strong>📚 並行して進める仕事</strong><p>水瀬 律：Kindle準備・権利確認。佐倉 慧：実行状況・障害監視。社員カードは公開用の部署案内です。</p></div></section>
+<section id="tab-ceo" class="section"><div class="title-row"><div><h1>社長の確認ページ</h1><p class="lede">完成した1話PDFの確認と採否は、Notionで行います。</p></div></div><div class="gate"><strong>📖 完成した1話だけを確認</strong><p>企画書・ネーム・作画途中のページ・QA文書は社内管理。全ページが揃い、独立QAが完了した場合のみ1話分のPDFが届きます。</p><p>採用・修正・不採用を決めるのはCEO本人。Kindle出版は別途CEO決裁が必要です。</p><div class="actions"><button id="open-ceo">Notionの社長確認ページを開く</button><button class="alt" id="setup-ceo">リンクを設定</button></div><p id="ceo-note" class="settinghint">この公開アプリにNotionのリンク・認証情報は含まれていません。</p></div></section>
+<section id="tab-settings" class="section"><div class="title-row"><div><h1>個人用リンク設定</h1><p class="lede">本人の端末だけにNotionページのURLを保存できます。</p></div></div><div class="gate"><strong>🔐 リンクは端末内だけで管理</strong><p>公開用のGitHubリポジトリにはNotionのページURLや認証トークンを保存しません。ここに設定したURLは、このブラウザ内にのみ保存されます。ログイン認証はNotionが行います。</p><div><label for="url-ceo" class="setting-label">社長の確認ページURL</label><input id="url-ceo" inputmode="url" placeholder="https://app.notion.com/p/..." autocomplete="off"></div><div><label for="url-live" class="setting-label">LIVEオフィスURL</label><input id="url-live" inputmode="url" placeholder="https://app.notion.com/p/..." autocomplete="off"></div><div class="actions"><button id="save">この端末に保存</button><button id="clear" class="alt">設定を削除</button></div><p id="result" class="settinghint" role="status">公開される社員データはデモです。リアルタイム連携は未実装です。</p></div></section>
+</main>
+<nav class="tabbar" aria-label="アプリのナビゲーション"><button data-tab="office" aria-current="page"><span class="ico">🏢</span>オフィス</button><button data-tab="work"><span class="ico">🎬</span>制作工程</button><button data-tab="ceo"><span class="ico">📖</span>1話PDF</button><button data-tab="settings"><span class="ico">⚙️</span>設定</button></nav>
+<div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-label="社員情報"><div class="sheet"><div class="sheet-head" id="person-head"></div><p id="person-job" class="sheet-text"></p><p class="muted">実際の稼働状況・完了原稿は非表示です。社内Notionの情報を確認してください。</p><div class="actions"><button id="person-live">Notion LIVEオフィス</button><button id="dismiss" class="alt">閉じる</button></div></div></div>
+<script>
+(()=>{'use strict';
+const employees=[
+{id:'dot',name:'dot',reading:'ドット',dept:'制作統括本部',role:'編集長・主作画',emoji:'👨🏻‍🎨',description:'原稿画像の制作・進行管理。制作された漫画はNotionへ正本保存します。'},
+{id:'hoshino',name:'星野 紡',reading:'ほしの つむぐ',dept:'企画・脚本部',role:'企画・脚本',emoji:'👩🏻‍💻',description:'読者を引き込む物語、主人公、台詞・脚本を作ります。'},
+{id:'asakura',name:'朝倉 奏',reading:'あさくら かなで',dept:'ネーム演出部',role:'ネーム演出',emoji:'👨🏻‍💻',description:'ページの流れ、コマ割り、吹き出し、右上から左下の読順を設計します。'},
+{id:'fujiwara',name:'藤原 透',reading:'ふじわら とおる',dept:'作画設計部',role:'作画設計',emoji:'👨🏼‍🎨',description:'構図・キャラ・背景・小道具の連続性を担当します。'},
+{id:'kiriya',name:'桐谷 凛',reading:'きりたに りん',dept:'品質保証部',role:'独立QA',emoji:'👩🏻‍🔬',description:'完成前の漫画を別担当として検査し、修正の必要性を判断します。'},
+{id:'minase',name:'水瀬 律',reading:'みなせ りつ',dept:'出版・権利管理部',role:'Kindle出版準備',emoji:'👩🏼‍💼',description:'入稿に必要な形式、素材の権利、AI生成申告を整理します。'},
+{id:'miyahara',name:'宮原 遥',reading:'みやはら はるか',dept:'制作管理・納品部',role:'1話PDF納品',emoji:'👩🏻‍💻',description:'実際の漫画1話の全ページを単一PDFにまとめて提出します。'},
+{id:'sakura',name:'佐倉 慧',reading:'さくら けい',dept:'運営監査部',role:'稼働監視',emoji:'👨🏻‍💼',description:'実行・作業終了・障害を客観的な証拠で確認します。'}
+];
+const byId=Object.fromEntries(employees.map(x=>[x.id,x]));const $=id=>document.getElementById(id);let lastFocused=null;
+const SETTINGS_KEY='aimanga-private-links-v1';function readSettings(){try{const o=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');return {ceo:o.ceo||'',live:o.live||''}}catch(e){return {ceo:'',live:''}}};let privateLinks=readSettings();
+function valid(v){try{const u=new URL(v);return u.protocol==='https:'&&['app.notion.com','www.notion.so','notion.so'].includes(u.hostname)}catch(e){return false}};
+function openPrivate(which){const url=privateLinks[which];if(!valid(url)){showTab('settings');$('result').textContent='先にNotionの'+(which==='ceo'?'社長確認ページ':'LIVEオフィス')+'URLを登録してください。';return;}window.open(url,'_blank','noopener,noreferrer')}
+function showTab(name){document.querySelectorAll('.section').forEach(el=>el.classList.toggle('active',el.id==='tab-'+name));document.querySelectorAll('.tabbar button').forEach(el=>{if(el.dataset.tab===name)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});window.scrollTo({top:0,behavior:'smooth'});}
+function renderCards(){const container=$('staff-grid');employees.forEach(s=>{const b=document.createElement('button');b.className='employee';b.type='button';b.dataset.staff=s.id;const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const name=document.createElement('b');name.textContent=s.name;const dept=document.createElement('small');dept.textContent=s.dept;b.append(emo,name,dept);container.append(b)})}
+function openEmployee(id){lastFocused=document.activeElement;const s=byId[id];if(!s){const h=$('person-head');h.replaceChildren();const n=document.createElement('strong');n.textContent='CEO室';const emo=document.createElement('span');emo.className='avatar';emo.textContent='👑';h.append(emo,n);$('person-job').textContent='CEOはあなた。作品採用・修正・出版の最終判断を行います。';}else{const h=$('person-head');h.replaceChildren();const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const d=document.createElement('div');const nm=document.createElement('b');nm.textContent=s.name;const tt=document.createElement('small');tt.textContent=s.dept+' / '+s.role;d.append(nm,tt);h.append(emo,d);$('person-job').textContent=s.description;}$('overlay').classList.add('on');$('overlay').setAttribute('aria-hidden','false');$('dismiss').focus();}
+function closeEmployee(){$('overlay').classList.remove('on');$('overlay').setAttribute('aria-hidden','true');if(lastFocused?.focus)lastFocused.focus();}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-staff]');if(b)openEmployee(b.dataset.staff)});document.querySelectorAll('.tabbar button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+$('dismiss').addEventListener('click',closeEmployee);$('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closeEmployee()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeEmployee()});
+$('open-ceo').addEventListener('click',()=>openPrivate('ceo'));$('person-live').addEventListener('click',()=>{closeEmployee();openPrivate('live')});$('setup-ceo').addEventListener('click',()=>showTab('settings'));
+$('url-ceo').value=privateLinks.ceo;$('url-live').value=privateLinks.live;
+$('save').addEventListener('click',()=>{const ceo=$('url-ceo').value.trim(),live=$('url-live').value.trim();if((ceo&&!valid(ceo))||(live&&!valid(live))){$('result').textContent='Notion公式のHTTPS URLだけを入力してください。';return;}privateLinks={ceo,live};try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(privateLinks));$('result').textContent='このブラウザに保存しました。GitHubへ送信していません。';}catch(e){$('result').textContent='ブラウザの保存が無効です。シークレットモード等をご確認ください。'}});
+$('clear').addEventListener('click',()=>{privateLinks={ceo:'',live:''};$('url-ceo').value='';$('url-live').value='';try{localStorage.removeItem(SETTINGS_KEY)}catch(e){}$('result').textContent='保存したリンクを削除しました。'});
+renderCards();
+})();
+</script>
+</body>
+</html>
