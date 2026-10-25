@@ -23,7 +23,7 @@
 1. 現在の `dawn-app.jp` が本当に ConoHa VPS / Nginx を使用しているか、公開サーバーの管理画面と設定で確認してください。ホスティングが変更済みなら現在の構成に合わせます。
 2. 既存 Nginx server 設定をバックアップしてください。**既存 `/home` の location や証明書・PM2 プロセス・DNS・main ブランチを上書き禁止**。
 3. 配信専用ディレクトリ例：`/srv/aimanga-office/current/` に、この配布物の **`home/office/` の中身（index.html、assets/、manifest.webmanifest、icon.svg）** を配置します。
-4. `deploy/conoha-nginx-location.conf` の `/home/office/` 専用 location を**既存サイトの正しい HTTPS server ブロック内**に追加します。既存の認証方式があればそちらで保護します。必要なら HTTPS・Basic 認証等を適用し、秘密情報はリポジトリへコミットしません。
+4. `deploy/conoha-nginx-location.conf` の `/home/office/` 専用 location を**既存サイトの正しい HTTPS server ブロック内**に追加します。既存の認証方式があればそちらで保護します。同梱のNginx例ではBasic認証を**有効**にしています。サーバー側で認証ファイル（例：`/etc/nginx/.aimanga-office-htpasswd`）を安全に作成してから設定を読み込みます。既存の認証方式に変更する場合も、同等のアクセス制限を維持してください。秘密情報はリポジトリへコミットしません。
 5. Nginx構文を検証し、既存トップ／home／APIへのルーティングが変わらないことを確認したうえでのみリロード。証明書・DNS はそのまま使います。
 6. 公開後に `https://dawn-app.jp/home/office/` をiPhoneで表示、部屋タップ・下部ナビ・Notionリンク設定・既存Dawnホームを確認します。**この手順は現在未実施です。**
 7. `deploy/dawn-home-link.html` は既存Dawnの `/home` に「オフィスを開く」リンクを追加する参考です。既存ホームのソースに合った変更が必要です。
