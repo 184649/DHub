@@ -35,15 +35,40 @@
     @media(max-width:580px){main{padding:17px 12px 110px}.head{padding:8px 13px}.summary{gap:7px}.summary>div{padding:11px}.summary strong{font-size:21px}.summary span{font-size:9px}.title-row{align-items:start}.illustration-tag{font-size:9px;padding:7px 9px}.staffgrid{gap:7px}.employee{padding:10px}.flow{grid-template-columns:1fr}.tabbar button{padding:5px 9px;min-width:72px}.building{min-width:720px}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   </style>
+
+  <style>
+  .mini-note{color:#58758e;font-size:11px;line-height:1.65;margin:9px 0 14px}
+  .state-badge{display:inline-flex;gap:5px;align-items:center;margin-top:8px;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:800;color:#4f6479;background:#eef1f4;border:1px solid #e3e9ed}
+  .state-badge::before{content:"";width:7px;height:7px;border-radius:100%;background:#9aa7b3}
+  .employee[data-live-status="working"] .state-badge,.employee[data-live-status="working"] .state-badge::before{color:#136c42;background:#d9f8e8;border-color:#b7e5cd}
+  .employee[data-live-status="working"] .state-badge::before{background:#16a667}
+  .employee[data-live-status="waiting"] .state-badge{color:#185e95;background:#e7f3fc;border-color:#c6dff4}
+  .employee[data-live-status="waiting"] .state-badge::before{background:#238bd1}
+  .employee[data-live-status="checking"] .state-badge{color:#90610a;background:#fff5da;border-color:#efdaa0}
+  .employee[data-live-status="checking"] .state-badge::before{background:#e9ab27}
+  .employee[data-live-status="blocked"] .state-badge{color:#9c2b25;background:#fff0ec;border-color:#f5c3bb}
+  .employee[data-live-status="blocked"] .state-badge::before{background:#e44936}
+  .hit::after{content:"";position:absolute;top:7px;right:9px;width:13px;height:13px;border:3px solid white;border-radius:50%;background:#9ba8b4;box-shadow:0 2px 9px #0c2b4570}
+  .hit[data-live-status="working"]::after{background:#20b76d;animation:officePulse 2.1s ease-in-out infinite}
+  .hit[data-live-status="waiting"]::after{background:#208acf}
+  .hit[data-live-status="checking"]::after{background:#e9ab27}
+  .hit[data-live-status="blocked"]::after{background:#ec5148}
+  .employee[data-live-status="working"] .avatar{animation:officeBob 2.3s ease-in-out infinite}
+  @keyframes officeBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes officePulse{0%,100%{box-shadow:0 0 0 0 #1bb77666}60%{box-shadow:0 0 0 9px #1bb77600}}
+  #sync-state{font-weight:800}#sync-at{font-size:10px;opacity:.8}
+  .status-source{display:inline-block;color:#216d9b;font-size:12px;font-weight:800;margin:0 0 14px;text-decoration:underline}
+  @media(prefers-reduced-motion:reduce){.employee[data-live-status="working"] .avatar,.hit[data-live-status="working"]::after{animation:none!important}}
+  </style>
 </head>
 <body>
-<header><div class="head"><div class="logo">🏢</div><div class="brand">AI漫画出版社<small>AIMANGA / VIRTUAL OFFICE</small></div><div class="header-right"><b>WEB APP</b>静的オフィス表示</div></div></header>
+<header><div class="head"><div class="logo">🏢</div><div class="brand">AI漫画出版社<small>AIMANGA / VIRTUAL OFFICE</small></div><div class="header-right"><b>WEB APP</b>Notion実行ログ連携</div></div></header>
 <main>
 <section id="tab-office" class="section active">
-  <div class="title-row"><div><h1>バーチャルオフィス</h1><p class="lede">8つの部署をタップして、AI社員の担当を確認できます。</p></div><span class="illustration-tag">公開デモ画面</span></div>
-  <div class="summary"><div><strong>8</strong><span>AI社員</span></div><div><strong>8</strong><span>部署</span></div><div><strong>—</strong><span>実稼働は非表示</span></div></div>
+  <div class="title-row"><div><h1>バーチャルオフィス</h1><p class="lede">8つの部署をタップして、AI社員の担当を確認できます。</p></div><span class="illustration-tag" id="live-version">読込中</span></div>
+  <div class="summary"><div><strong>8</strong><span>AI社員</span></div><div><strong>8</strong><span>部署</span></div><div><strong id="working-count">—</strong><span>実行中を証明できた人数</span></div></div>
   <div class="layout">
-    <section class="panel"><div class="panel-title"><span>🏙️ オフィス全体</span><small>部屋をタップ</small></div><div class="warning">このイラスト内の稼働ランプ・時計は<strong>デザイン上のサンプル</strong>です。実際のAI稼働を反映していません。</div>
+    <section class="panel"><div class="panel-title"><span>🏙️ オフィス全体</span><small>部屋をタップ</small></div><div class="warning">**画像に描かれた時計やランプはデザインです。** 下の社員カードと部屋の小ランプのみ、Notionの実行記録を反映します。<br><strong id="sync-state" role="status" aria-live="polite">Notion同期を確認中</strong> <span id="sync-at"></span></div>
     <div class="canvas-scroll" tabindex="0" aria-label="バーチャルオフィス 横スクロール可能"><div class="building" id="building">
       <button class="hit ceo" data-staff="ceo" aria-label="CEO室"><span class="sr">CEO</span></button>
       <button class="hit r0" data-staff="dot" aria-label="dot 制作統括本部"><span class="sr">dot</span></button>
@@ -54,20 +79,20 @@
       <button class="hit r5" data-staff="minase" aria-label="水瀬律 出版権利管理部"><span class="sr">水瀬</span></button>
       <button class="hit r6" data-staff="miyahara" aria-label="宮原遥 制作管理納品部"><span class="sr">宮原</span></button>
       <button class="hit r7" data-staff="sakura" aria-label="佐倉慧 運営監査部"><span class="sr">佐倉</span></button>
-    </div></div><div class="below"><span>↔️ スマホでは横スクロール</span><span>全室タップ可能</span></div>
+    </div></div><div class="below"><span>↔️ スマホでは横スクロール</span><span>ランプは実記録から判定</span></div>
     </section>
-    <aside class="panel note-panel"><h3>👑 CEO向け案内</h3><p>各社員は独立した制作工程を担当。会社の仕事を見える化します。</p><div class="notice">完成した漫画は「1話全編を1つのPDF」でCEOへ。制作中の資料や原稿はNotionに保持します。</div><p style="margin-top:15px">詳細情報は、ログインが必要な社内Notionで確認します。この公開画面に未公開の原稿や実行ログは載せていません。</p></aside>
+    <aside class="panel note-panel"><h3>👑 CEO向け案内</h3><p>各社員は独立した制作工程を担当。会社の仕事を見える化します。</p><div class="notice">完成した漫画は「1話全編を1つのPDF」でCEOへ。認証済み・審査済みの提出候補：<strong id="pdf-count-aside">—</strong>件。原稿はNotionに保持します。</div><p style="margin-top:15px">詳細情報は、ログインが必要な社内Notionで確認します。この公開画面に未公開の原稿や実行ログは載せていません。</p></aside>
   </div>
-  <div class="panel" style="margin-top:17px;padding:17px"><b>👥 AI社員一覧</b><div id="staff-grid" class="staffgrid"></div></div>
+  <div class="panel" style="margin-top:17px;padding:17px"><b>👥 AI社員一覧</b><p class="mini-note">緑：実行中（同一runの開始＋確認済み活動） / 青：終了・待機 / 黄：確認中 / 赤：障害イベント / 灰：記録なし。古いカードの「作業中」を鵜呑みにしません。</p><div id="staff-grid" class="staffgrid"></div></div>
 </section>
 <section id="tab-work" class="section"><div class="title-row"><div><h1>制作ワークフロー</h1><p class="lede">部署間で仕事を引き継いで、1話を完成させます。</p></div></div><div class="flow">
   <div class="step"><b>1. 企画・脚本</b><small>星野 紡がストーリーを制作</small></div><div class="step"><b>2. ネーム演出</b><small>朝倉 奏が漫画の読順・コマを設計</small></div><div class="step"><b>3. 作画設計</b><small>藤原 透がキャラ・背景の連続性を管理</small></div><div class="step"><b>4. 作画統括</b><small>dotが実画像制作を担当</small></div><div class="step"><b>5. 独立QA</b><small>桐谷 凛が全ページを検証</small></div><div class="step"><b>6. 1話PDF納品</b><small>宮原 遥が1話PDFを構成し提出</small></div>
 </div><div class="gate" style="margin-top:16px"><strong>📚 並行して進める仕事</strong><p>水瀬 律：Kindle準備・権利確認。佐倉 慧：実行状況・障害監視。社員カードは公開用の部署案内です。</p></div></section>
-<section id="tab-ceo" class="section"><div class="title-row"><div><h1>社長の確認ページ</h1><p class="lede">完成した1話PDFの確認と採否は、Notionで行います。</p></div></div><div class="gate"><strong>📖 完成した1話だけを確認</strong><p>企画書・ネーム・作画途中のページ・QA文書は社内管理。全ページが揃い、独立QAが完了した場合のみ1話分のPDFが届きます。</p><p>採用・修正・不採用を決めるのはCEO本人。Kindle出版は別途CEO決裁が必要です。</p><div class="actions"><button id="open-ceo">Notionの社長確認ページを開く</button><button class="alt" id="setup-ceo">リンクを設定</button></div><p id="ceo-note" class="settinghint">この公開アプリにNotionのリンク・認証情報は含まれていません。</p></div></section>
+<section id="tab-ceo" class="section"><div class="title-row"><div><h1>社長の確認ページ</h1><p class="lede">完成した1話PDFの確認と採否は、Notionで行います。</p></div></div><div class="gate"><strong>📖 完成した1話だけを確認</strong><p id="pdf-count-banner" role="status">提出状況の同期を確認中です。</p><p>企画書・ネーム・作画途中のページ・QA文書は社内管理。全ページが揃い、独立QAが完了した場合のみ1話分のPDFが届きます。</p><p>採用・修正・不採用を決めるのはCEO本人。Kindle出版は別途CEO決裁が必要です。</p><div class="actions"><button id="open-ceo">Notionの社長確認ページを開く</button><button class="alt" id="setup-ceo">リンクを設定</button></div><p id="ceo-note" class="settinghint">この公開アプリにNotionのリンク・認証情報は含まれていません。</p></div></section>
 <section id="tab-settings" class="section"><div class="title-row"><div><h1>個人用リンク設定</h1><p class="lede">本人の端末だけにNotionページのURLを保存できます。</p></div></div><div class="gate"><strong>🔐 リンクは端末内だけで管理</strong><p>公開用のGitHubリポジトリにはNotionのページURLや認証トークンを保存しません。ここに設定したURLは、このブラウザ内にのみ保存されます。ログイン認証はNotionが行います。</p><div><label for="url-ceo" class="setting-label">社長の確認ページURL</label><input id="url-ceo" inputmode="url" placeholder="https://app.notion.com/p/..." autocomplete="off"></div><div><label for="url-live" class="setting-label">LIVEオフィスURL</label><input id="url-live" inputmode="url" placeholder="https://app.notion.com/p/..." autocomplete="off"></div><div class="actions"><button id="save">この端末に保存</button><button id="clear" class="alt">設定を削除</button></div><p id="result" class="settinghint" role="status">公開される社員データはデモです。リアルタイム連携は未実装です。</p></div></section>
 </main>
 <nav class="tabbar" aria-label="アプリのナビゲーション"><button data-tab="office" aria-current="page"><span class="ico">🏢</span>オフィス</button><button data-tab="work"><span class="ico">🎬</span>制作工程</button><button data-tab="ceo"><span class="ico">📖</span>1話PDF</button><button data-tab="settings"><span class="ico">⚙️</span>設定</button></nav>
-<div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-label="社員情報"><div class="sheet"><div class="sheet-head" id="person-head"></div><p id="person-job" class="sheet-text"></p><p class="muted">実際の稼働状況・完了原稿は非表示です。社内Notionの情報を確認してください。</p><div class="actions"><button id="person-live">Notion LIVEオフィス</button><button id="dismiss" class="alt">閉じる</button></div></div></div>
+<div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-label="社員情報"><div class="sheet"><div class="sheet-head" id="person-head"></div><p id="person-job" class="sheet-text"></p><p class="muted" id="person-presence">Notionの実行記録を確認中です。</p><p class="muted" id="person-time"></p><a class="status-source" id="person-evidence" target="_blank" rel="noopener noreferrer" hidden>実行記録をNotionで開く</a><div class="actions"><button id="person-live">Notion LIVEオフィス</button><button id="dismiss" class="alt">閉じる</button></div></div></div>
 <script>
 (()=>{'use strict';
 const employees=[
@@ -85,8 +110,8 @@ const SETTINGS_KEY='aimanga-private-links-v1';function readSettings(){try{const 
 function valid(v){try{const u=new URL(v);return u.protocol==='https:'&&['app.notion.com','www.notion.so','notion.so'].includes(u.hostname)}catch(e){return false}};
 function openPrivate(which){const url=privateLinks[which];if(!valid(url)){showTab('settings');$('result').textContent='先にNotionの'+(which==='ceo'?'社長確認ページ':'LIVEオフィス')+'URLを登録してください。';return;}window.open(url,'_blank','noopener,noreferrer')}
 function showTab(name){document.querySelectorAll('.section').forEach(el=>el.classList.toggle('active',el.id==='tab-'+name));document.querySelectorAll('.tabbar button').forEach(el=>{if(el.dataset.tab===name)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});window.scrollTo({top:0,behavior:'smooth'});}
-function renderCards(){const container=$('staff-grid');employees.forEach(s=>{const b=document.createElement('button');b.className='employee';b.type='button';b.dataset.staff=s.id;const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const name=document.createElement('b');name.textContent=s.name;const dept=document.createElement('small');dept.textContent=s.dept;b.append(emo,name,dept);container.append(b)})}
-function openEmployee(id){lastFocused=document.activeElement;const s=byId[id];if(!s){const h=$('person-head');h.replaceChildren();const n=document.createElement('strong');n.textContent='CEO室';const emo=document.createElement('span');emo.className='avatar';emo.textContent='👑';h.append(emo,n);$('person-job').textContent='CEOはあなた。作品採用・修正・出版の最終判断を行います。';}else{const h=$('person-head');h.replaceChildren();const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const d=document.createElement('div');const nm=document.createElement('b');nm.textContent=s.name;const tt=document.createElement('small');tt.textContent=s.dept+' / '+s.role;d.append(nm,tt);h.append(emo,d);$('person-job').textContent=s.description;}$('overlay').classList.add('on');$('overlay').setAttribute('aria-hidden','false');$('dismiss').focus();}
+function renderCards(){const container=$('staff-grid');employees.forEach(s=>{const b=document.createElement('button');b.className='employee';b.type='button';b.dataset.staff=s.id;const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const name=document.createElement('b');name.textContent=s.name;const dept=document.createElement('small');dept.textContent=s.dept;const badge=document.createElement('span');badge.className='state-badge';badge.textContent='同期待ち';b.append(emo,name,dept,badge);container.append(b)})}
+function openEmployee(id){lastFocused=document.activeElement;const s=byId[id];if(!s){const h=$('person-head');h.replaceChildren();const n=document.createElement('strong');n.textContent='CEO室';const emo=document.createElement('span');emo.className='avatar';emo.textContent='👑';h.append(emo,n);$('person-job').textContent='CEOはあなた。作品採用・修正・出版の最終判断を行います。';}else{const h=$('person-head');h.replaceChildren();const emo=document.createElement('span');emo.className='avatar';emo.textContent=s.emoji;const d=document.createElement('div');const nm=document.createElement('b');nm.textContent=s.name;const tt=document.createElement('small');tt.textContent=s.dept+' / '+s.role;d.append(nm,tt);h.append(emo,d);$('person-job').textContent=s.description;}updatePersonState(id);$('overlay').classList.add('on');$('overlay').setAttribute('aria-hidden','false');$('dismiss').focus();}
 function closeEmployee(){$('overlay').classList.remove('on');$('overlay').setAttribute('aria-hidden','true');if(lastFocused?.focus)lastFocused.focus();}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-staff]');if(b)openEmployee(b.dataset.staff)});document.querySelectorAll('.tabbar button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
 $('dismiss').addEventListener('click',closeEmployee);$('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closeEmployee()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeEmployee()});
@@ -95,6 +120,61 @@ $('url-ceo').value=privateLinks.ceo;$('url-live').value=privateLinks.live;
 $('save').addEventListener('click',()=>{const ceo=$('url-ceo').value.trim(),live=$('url-live').value.trim();if((ceo&&!valid(ceo))||(live&&!valid(live))){$('result').textContent='Notion公式のHTTPS URLだけを入力してください。';return;}privateLinks={ceo,live};try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(privateLinks));$('result').textContent='このブラウザに保存しました。GitHubへ送信していません。';}catch(e){$('result').textContent='ブラウザの保存が無効です。シークレットモード等をご確認ください。'}});
 $('clear').addEventListener('click',()=>{privateLinks={ceo:'',live:''};$('url-ceo').value='';$('url-live').value='';try{localStorage.removeItem(SETTINGS_KEY)}catch(e){}$('result').textContent='保存したリンクを削除しました。'});
 renderCards();
+
+// Real data can ONLY come from the authenticated same-origin API; never from demo animation.
+let latestOffice=null,busy=false,failCount=0;
+const presentation={working:'作業中',waiting:'待機',checking:'確認中',blocked:'障害あり',unknown:'記録不足'};
+const shortTime=(iso)=>{if(!iso)return '—';const d=new Date(iso);return Number.isNaN(d.getTime())?'—':d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})};
+function updatePersonState(id){
+ const who=latestOffice?.workers?.find(x=>x.id===id);
+ $('person-presence').textContent=who?`実記録判定：${who.label}。${who.reason||''}`:'実行状況はまだ確認できません。';
+ $('person-time').textContent=who?`最終イベント：${shortTime(who.last_event_at)} ／ ${who.last_event??'なし'}${who.card_mismatch?' ／ 社員カードに古い作業中表示あり':''}`:'';
+ const a=$('person-evidence');if(who?.evidence_url&&/^https:\/\/(app\.notion\.com|www\.notion\.so|notion\.so)\//.test(who.evidence_url)){a.href=who.evidence_url;a.hidden=false}else{a.hidden=true;a.removeAttribute('href')}
+}
+function renderOffice(response){
+ latestOffice=response;
+ const ok=response?.sync?.state==='ok'&&!response.sync.stale;
+ $('live-version').textContent=ok?'認証済みNotion実行記録':'実行状態を確認できません';
+ $('sync-state').textContent=ok?'Notion同期成功':response?.sync?.state==='incomplete'?'記録が一部取得できません':'Notion同期エラー';
+ $('sync-at').textContent=`最終取得 ${shortTime(response?.as_of)}`;
+ const rows=Array.isArray(response?.workers)?response.workers:[];
+ let current=0;
+ for(const employee of employees){
+  const w=rows.find(x=>x.id===employee.id);
+  const state=ok&&w&&Object.hasOwn(presentation,w.presence)?w.presence:'unknown';
+  if(state==='working')current++;
+  const card=document.querySelector(`#staff-grid [data-staff="${employee.id}"]`);
+  if(card){card.dataset.liveStatus=state;card.title=`${employee.name}：${w?.reason??'実記録未確認'}`;const badge=card.querySelector('.state-badge');badge.textContent=ok?(w?.label??presentation.unknown):'同期未確認';}
+  const hit=document.querySelector(`.hit[data-staff="${employee.id}"]`);
+  if(hit){hit.dataset.liveStatus=state;hit.title=ok?`${employee.name}：${w?.label??presentation.unknown}`:`${employee.name}：同期未確認`}
+ }
+ $('working-count').textContent=ok?String(current):'—';
+ const count=ok&&Number.isInteger(response?.summary?.ceo_ready_episode_pdf_count)?response.summary.ceo_ready_episode_pdf_count:null;
+ $('pdf-count-aside').textContent=count===null?'未確認':String(count);
+ $('pdf-count-banner').textContent=count===null?'Notion未接続：提出状況は確認できません。':`現時点で確認条件を満たした1話PDF：${count}件（最終検査はNotionで実施）`;
+ const active=$('overlay').classList.contains('on');if(active){const cur=lastFocused?.dataset?.staff??null;updatePersonState(cur)}
+}
+async function refreshOffice(){
+ if(busy||document.hidden)return;
+ if(location.hostname.endsWith('.github.io')||location.protocol==='file:'){
+  $('sync-state').textContent='公開プレビュー／ローカル表示：API未接続';$('live-version').textContent='実稼働は表示されません';return;
+ }
+ busy=true;
+ const abort=new AbortController();const timeout=setTimeout(()=>abort.abort(),12000);
+ try{
+  const result=await fetch('./api/v1/office',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:abort.signal});
+  if(!result.ok)throw new Error('API response unavailable');
+  const payload=await result.json();
+  if(payload.schema_version!=='1.0'||!Array.isArray(payload.workers))throw new Error('Bad API response');
+  renderOffice(payload);failCount=0;
+ }catch(err){failCount++;renderOffice({schema_version:'1.0',as_of:new Date().toISOString(),sync:{state:'error',stale:true},workers:[],summary:{ceo_ready_episode_pdf_count:null}});}
+ finally{clearTimeout(timeout);busy=false}
+}
+// The browser never contacts Notion itself. Server-side cache limits Notion API traffic.
+setInterval(()=>{if(failCount<8||Date.now()%120000<35000)refreshOffice()},35000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOffice()});
+refreshOffice();
+
 })();
 </script>
 </body>
